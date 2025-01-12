@@ -1,6 +1,6 @@
 densityEst2d <- function(X, x=NULL, nEval=2500, kernel="epa", D=NULL, 
                         method.h=NULL, h=NULL, lambda = NULL, 
-                        sparse=FALSE, gc=FALSE, chunk_size=1024) {
+                        sparse=FALSE, gc=FALSE, chunk_size=1024, Y=NULL) {
     
     nObs = nrow(X)
     covX = cov(X)
@@ -16,6 +16,11 @@ densityEst2d <- function(X, x=NULL, nEval=2500, kernel="epa", D=NULL,
 
     if (is.null(lambda)){
         lambda = rep(1,nObs)
+    }
+    
+    # Check for conflicting bandwidth specifications
+    if (!is.null(h) && !is.null(method.h)) {
+        stop("Cannot specify both h and method.h. Please provide only one.")
     }
     
     # If h is provided directly, use it regardless of method.h
@@ -62,7 +67,11 @@ densityEst2d <- function(X, x=NULL, nEval=2500, kernel="epa", D=NULL,
             stop("kernel not recognized") 
         }
         
-        densityEst[chunk] = 1/(nObs * h^2 * sqrt(detS)) * colSums(sweep(K,1,lambda^2,"/"))
+        K_scaled = sweep(K, 1, lambda^2, "/")
+        if (!is.null(Y)) {
+            K_scaled = sweep(K_scaled, 1, Y, "*")
+        }
+        densityEst[chunk] = 1/(nObs * h^2 * sqrt(detS)) * colSums(K_scaled)
         if (gc == TRUE){ gc() }
     }
     
