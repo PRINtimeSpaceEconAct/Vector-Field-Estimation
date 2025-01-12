@@ -37,15 +37,15 @@ computeDcomponents <- function(X,x,A=NULL,dMax=NULL,sparse=TRUE){
     MObs2 = matrix(rep(X[,2],nEval),nObs,nEval,byrow=FALSE)
     MEval1 = matrix(rep(x[,1],nObs),nObs,nEval,byrow=TRUE)
     MEval2 = matrix(rep(x[,2],nObs),nObs,nEval,byrow=TRUE)
-    
-    z1 = MEval1 - MObs1
-    z2 = MEval2 - MObs2 
-    
+  
     if (sparse == TRUE){
-        z1 = as(z1,"sparseMatrix")
-        z2 = as(z2,"sparseMatrix")
+        z1 = as(MEval1 - MObs1,"sparseMatrix")
+        z2 = as(MEval2 - MObs2,"sparseMatrix")
+    }else{
+        z1 = MEval1 - MObs1
+        z2 = MEval2 - MObs2
     }
-    
+
     return(listN(z1,z2))
 }
 
@@ -53,15 +53,14 @@ mahalanobis <- function(z1,z2,A,den){
     # z1,z2 = matrices of differences on both components (nObs x nEval)
     # A matrix of covariance of observations (2 x 2)
     # den vector of length nObs for denominators
-    
+
     nObs = nrow(z1)
     nEval = ncol(z1)
-    Mden = matrix(rep(den,nEval),nObs,nEval,byrow=FALSE)
-    
+
     QF = A[1,1]*z1^2 + (A[1,2] + A[2,1])*z1*z2 + A[2,2]*z2^2
-    
-    Mmahalanobis = QF/Mden
-    
+
+    Mmahalanobis = sweep(QF,1,den,"/")
+
     return(Mmahalanobis)
 }
     

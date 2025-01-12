@@ -4,3 +4,8 @@ listN <- function(...){
     names(anonList) <- as.character(substitute(list(...)))[-1]
     anonList
 }
+
+chunkSize <- function(){
+    freeMem = Sys.procmem()$freeram
+    return(10000)
+}

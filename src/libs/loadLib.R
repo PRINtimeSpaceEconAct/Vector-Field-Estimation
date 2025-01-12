@@ -1,11 +1,11 @@
-
-
 library(extremefit)
 library(Matrix)
 library(spatstat)
 library(provenance)
+library(memuse)
 
-source("utils.R")
-source("distances.R")
-source("kernels.R")
-source("density.R")
+
+source("src/libs/utils.R")
+source("src/libs/distances.R")
+source("src/libs/kernels.R")
+source("src/libs/density.R")

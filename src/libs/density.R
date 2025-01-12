@@ -1,8 +1,6 @@
-
-
-
-densityEst2d <- function(X,x=NULL,nEval=2500,
-             kernel="epa",D=NULL,method.h=NULL,h=NULL,sparse=FALSE,gc=FALSE){
+densityEst2d <- function(X, x=NULL, nEval=2500, kernel="epa", D=NULL, 
+                        method.h=NULL, h=NULL, lambda = NULL, 
+                        sparse=FALSE, gc=FALSE, chunk_size=1024) {
     
     nObs = nrow(X)
     covX = cov(X)
@@ -10,34 +8,89 @@ densityEst2d <- function(X,x=NULL,nEval=2500,
     detS = det(covX)
 
     if (is.null(x)){
-        xGrid = seq(from=min(X[,1]),to=max(X[,1]),length.out=round(sqrt(nEval)))
-        yGrid = seq(from=min(X[,2]),to=max(X[,2]),length.out=round(sqrt(nEval)))
+        xGrid = seq(from=min(X[,1]), to=max(X[,1]), length.out=round(sqrt(nEval)))
+        yGrid = seq(from=min(X[,2]), to=max(X[,2]), length.out=round(sqrt(nEval)))
         x = as.matrix(expand.grid(xGrid,yGrid))
     }
     nEval = nrow(x)
-    
-    if (is.null(D)){ 
-        D = computeDcomponents(X,x,sparse=sparse); if (gc == TRUE){ gc() }
+
+    if (is.null(lambda)){
+        lambda = rep(1,nObs)
     }
     
-    # defaults to Sheather & Jones (1991) 
-    # if (is.null(h) & is.null(method.h)){ h = 1.77*nrow(X)^(-1/6) } 
-    # else if (method.h == "silverman") { h = 1.77*nrow(X)^(-1/6) }
-    # else if (method.h == "sj") { h = bw.SJ(X) }
-    # else if (method.h == "scott") { h = bw.scott(X) }
-    # else if (method.h == "botev") { h = botev(X) }
-    # else { stop("method.h not recognized") }
+    # If h is provided directly, use it regardless of method.h
+    if (!is.null(h)) {
+        # Keep h as is
+    } else if (is.null(method.h)) {
+        # Default method when both h and method.h are null
+        method.h = "silverman"
+        h =  nrow(X)^(-1/6)
+    } else {
+        # Select h based on specified method
+        h = switch(method.h,
+            "silverman" = nrow(X)^(-1/6),
+            "sj" = bw.SJ(X),
+            "botev" = botev(X),
+            stop("method.h not recognized")
+        )
+    }
     
+    print(paste("Using h = ", h, "and method = ", method.h))
+
+    # Initialize empty vector for density estimates
+    densityEst = numeric(nEval)
     
-    M = mahalanobis(D$z1,D$z2,A=invS,den=rep(h^2,nObs)); if (gc == TRUE){ gc() }
+    # Process x in chunks
+    chunks = split(seq_len(nEval), ceiling(seq_len(nEval)/chunk_size))
+
+    for(chunk in chunks) {
+        x_chunk = x[chunk, , drop=FALSE]
+        if (is.null(D)){ 
+            D_chunk = computeDcomponents(X, x_chunk, sparse=sparse)
+            if (gc == TRUE){ gc() }
+        }
+        
+        M = mahalanobis(D_chunk$z1, D_chunk$z2, A=invS, den=h^2 * lambda^2)
+        if (gc == TRUE){ gc() }
+        
+        # Kernel computation
+        if (is.null(kernel) || kernel == "epa"){ 
+            K = epaKernel(M) 
+        } else if (kernel == "gauss"){ 
+            K = gaussKernel(M) 
+        } else { 
+            stop("kernel not recognized") 
+        }
+        
+        densityEst[chunk] = 1/(nObs * h^2 * sqrt(detS)) * colSums(sweep(K,1,lambda^2,"/"))
+        if (gc == TRUE){ gc() }
+    }
     
-    # defaults to Epanechnikov kernel
-    if (is.null(kernel)){  K = epaKernel(M) }
-    else if (kernel == "epa"){ K = epaKernel(M) }
-    else if (kernel == "gauss"){ K = gaussKernel(M) }
-    else { stop("kernel not recognized") }
-    
-    densityEst = 1/(nObs *h^2 * sqrt(detS)) * colSums(K)
-    
-    return(listN(x,densityEst))
+    return(listN(x, densityEst))
+}
+
+getLocalBandwidth <- function(X, kernel="epa", D=NULL, method.h=NULL, h=NULL,
+                            sparse=FALSE, gc=FALSE, chunk_size=1024, alpha = 0.5){
+    nObs = nrow(X)
+    nEval = nObs
+
+    pilotDensity = densityEst2d(X, x=X, nEval=nEval, kernel=kernel,
+                                D=D, method.h=method.h, h=h, sparse=sparse,
+                                gc=gc, chunk_size=chunk_size)
+    g = exp(mean(pilotDensity$densityEst))
+    lambda = (pilotDensity$densityEst/g)^(-alpha)
+
+    return(lambda)
+}
+
+densityEst2dAdaptive <- function(X, x=NULL, nEval=2500, kernel="epa", D=NULL,
+                                method.h=NULL, h=NULL,
+                                sparse=FALSE, gc=FALSE, chunk_size=1024, alpha = 0.5){
+
+    lambda = getLocalBandwidth(X, kernel=kernel, D=D, method.h=method.h, h=h,
+                                sparse=sparse, gc=gc, chunk_size=chunk_size, alpha = alpha)
+
+    est = densityEst2d(X, x=x, nEval=nEval, kernel=kernel, D=D, method.h=method.h, h=h,
+                                lambda=lambda, sparse=sparse, gc=gc, chunk_size=chunk_size)
+    return(est)
 }
