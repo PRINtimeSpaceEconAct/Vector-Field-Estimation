@@ -19,15 +19,12 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 # ---- Density Estimation Tests ----
 # Test adaptive bandwidth density estimation
 alpha = 0.5
-est <- densityEst2dAdaptive(X_0, x=x, kernel="gauss", sparse=FALSE, gc=TRUE, alpha = alpha)
-
-# Monitor memory usage
-# print(Sys.procmem())
+estAdaptive <- densityEst2dAdaptive(X_0, x=x, kernel.type="gauss", sparse=FALSE, gc=TRUE, chunk_size=1024, alpha=alpha)
 
 # Visualize adaptive density estimate
-xCoord = est$x[,1]
-yCoord = est$x[,2]
-z = est$densityEst
+xCoord = estAdaptive$x[,1]
+yCoord = estAdaptive$x[,2]
+z = estAdaptive$estimator
 print(plot_ly(x=xCoord, y=yCoord, z=z, intensity=z, type="mesh3d") %>%
     layout(title="Adaptive Bandwidth Density Estimation (Gaussian Kernel)",
            scene=list(
@@ -42,8 +39,7 @@ system.time(est.sm <- sm.density(X_0, eval.points=x, eval.grid=FALSE, nbins=0))
 print(paste("sm package bandwidth:", est.sm$h))
 
 # Visualize difference between implementations
-z = est.sm$estimate - est$densityEst
-# z = sign(z)*log10(abs(z))
+z = est.sm$estimate - est$estimator
 print(plot_ly(x=xCoord, y=yCoord, z=z, intensity=z, type="mesh3d") %>%
     layout(title=paste("Density Estimation: sm package vs Custom Adaptive (alpha =", alpha, ")"),
            scene=list(
@@ -74,41 +70,46 @@ print(paste("Maximum absolute difference between bandwidth approaches:", max_abs
 
 # ---- Regression Tests ----
 # Generate synthetic target data with known transformations
-X_1 = matrix(nrow=nObs, ncol=2)
+X_1 = matrix(nrow=nObs, ncol=1)
 X_1[,1] = 2*X_0[,1] + 1      # First component: linear transformation y = 2x + 1 
-X_1[,2] = -0.5*X_0[,2] + 3   # Second component: linear transformation y = -0.5x + 3
 
 # Nadaraya-Watson regression for each component
-est_comp1 = NWregression(X_0, X_1[,1], x=x, h=0.5, kernel="gauss", sparse=FALSE, gc=TRUE)
-est_comp2 = NWregression(X_0, X_1[,2], x=x, h=0.5, kernel="gauss", sparse=FALSE, gc=TRUE)
+est_comp = NWregression(X_0, X_1[,1], x=x, h=0.5, kernel.type="gauss", sparse=FALSE, gc=TRUE)
 
 # Visualize first component regression
 print(plot_ly() %>%
-    add_trace(x=est_comp1$x[,1], y=est_comp1$NWest, name="Predicted", mode="markers", 
+    add_trace(x=est_comp$x[,1], y=est_comp$estimator, name="Predicted", mode="markers", 
               marker=list(size=2, opacity=0.6)) %>%
     add_trace(x=xGrid, y=2*xGrid + 1, name="True", mode="lines", line=list(width=2)) %>%
     layout(title="NW Regression: First Component (y = 2x + 1)",
            xaxis=list(title="X"),
            yaxis=list(title="Y")))
 
-# Visualize second component regression
+# Compare with np package implementation using fixed bandwidth
+library(np)
+np_bw <- npregbw(xdat=X_0, ydat=X_1[,1], bws=c(0.5, 0.5), 
+                 bandwidth.compute=FALSE, 
+                 ckertype="gaussian",  # Specify Gaussian kernel
+                 ckerorder=2)  # Second-order kernel
+np_est <- npreg(bws=np_bw, 
+                exdat=x)
+
+# Visualize comparison between custom NW and np package
 print(plot_ly() %>%
-    add_trace(x=est_comp2$x[,2], y=est_comp2$NWest, name="Predicted", mode="markers",
+    add_trace(x=x[,1], y=np_est$mean, name="np package", mode="markers",
               marker=list(size=2, opacity=0.6)) %>%
-    add_trace(x=xGrid, y=-0.5*xGrid + 3, name="True", mode="lines", line=list(width=2)) %>%
-    layout(title="NW Regression: Second Component (y = -0.5x + 3)",
+    add_trace(x=xGrid, y=2*xGrid + 1, name="True", mode="lines", line=list(width=2)) %>%
+    layout(title="Regression Comparison: Custom NW vs np package (h=0.5)",
            xaxis=list(title="X"),
            yaxis=list(title="Y")))
 
-# Calculate and visualize regression error
-true_comp1 = 2*x[,1] + 1
-true_comp2 = -0.5*x[,2] + 3
-error = est_comp1$NWest - true_comp1
-
-print(plot_ly(x=xCoord, y=yCoord, z=error, intensity=error, type="mesh3d") %>%
-    layout(title="Total Regression Error (Euclidean Distance)",
+# Make a 3D plot with the difference between the two estimators
+z_diff = est_comp$estimator - np_est$mean
+print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
+    layout(title="Difference between Custom NW and np package (h=0.5)",
            scene=list(
-               zaxis=list(title="Error"),
+               zaxis=list(title="Difference"),
                xaxis=list(title="X"),
                yaxis=list(title="Y")
            )))
+

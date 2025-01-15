@@ -1,6 +1,6 @@
 kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="epa", D=NULL, 
                          method.h=NULL, h=NULL, lambda=NULL, 
-                         sparse=FALSE, gc=FALSE, chunk_size=nrow(x), type.est="density") {
+                         sparse=FALSE, gc=FALSE, chunk_size=nrow(x), type.est=NULL, Y=NULL) {
     
     nObs = nrow(X)
     covX = cov(X)
@@ -10,6 +10,8 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="epa", D=NULL,
     if (is.null(x)) { x = defineEvalPoints(X,nEval); nEval =  nrow(x) }
     if (is.null(chunk_size)) { chunk_size = nrow(x) }
     if (is.null(lambda)) { lambda = rep(1,nObs) }
+
+    if (is.null(type.est)) { stop("type.est not specified") }
     if (is.null(h) | is.null(method.h)) { 
         list.h = define_h_method.h(X,h,method.h)
         h = list.h$h
@@ -17,7 +19,7 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="epa", D=NULL,
     kernelFunction = defineKernel(kernel.type)
 
         
-    densityEst = numeric(nEval)
+    estimator = numeric(nEval)
     chunks = split(seq_len(nEval), ceiling(seq_len(nEval)/chunk_size))
     for(i in 1:length(chunks)) {
         if (DEBUG) print(paste("Computing chunk ",i,"/",length(chunks),sep=""))
@@ -35,18 +37,37 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="epa", D=NULL,
         
         # insert bootstrap here 
         
-        # qui switch between density, NW, o lpr
-        if (type.est == "density") {
-            densityEst[chunk] = 1/(nObs * h^2 * sqrt(detS)) * colSums(K_scaled) }
-        
-        # if (!is.null(Y)) {
-        #     K_scaled = sweep(K_scaled, 1, Y, "*")
-        # }
-        
+        # switch between density, NW
+        switch(type.est,
+            "density" = {
+                estimator[chunk] = computeTerms(X, Y, h, detS, K_scaled, type.est) },
+            "NW" = {
+                estimator[chunk] = computeTerms(X, Y, h, detS, K_scaled, type.est) },
+            {
+                stop(paste("Invalid type.est:", type.est, ". Must be either 'density' or 'NW'."))
+            }
+        )
         if (gc == TRUE){ gc() }
     }
     
-    return(listN(x, densityEst))
+    return(listN(x, estimator))
+}
+
+computeTerms <- function(X, Y, h, detS, K_scaled, type.est){
+    nObs = nrow(X)
+
+    switch(type.est,
+        "density" = {
+            return(1/(nObs * h^2 * sqrt(detS)) * colSums(K_scaled))
+        },
+        "NW" = {
+            K_scaledY = sweep(K_scaled, 1, Y, "*")
+            numerator = 1/(nObs * h^2 * sqrt(detS)) * colSums(K_scaledY)
+            denominator = 1/(nObs * h^2 * sqrt(detS)) * colSums(K_scaled)
+            return(numerator/denominator)
+        }
+    )
+
 }
 
 defineEval <- function(X,nEval){
@@ -74,7 +95,7 @@ define_h_method.h <- function(X,h,method.h){
     } else {
         # Select h based on specified method
         h = switch(method.h,
-                   "silverman" = nrow(X)^(-1/6),
+                   "silverman" = 0.96 * nrow(X)^(-1/6),
                    "sj" = bw.SJ(X),
                    "botev" = botev(X),
                    stop("method.h not recognized")
@@ -92,17 +113,16 @@ defineKernel <- function(kernel.type) {
     else { stop("kernel not recognized") }
 }
 
-getLocalBandwidth <- function(X, kernel="epa", D=NULL, method.h=NULL, h=NULL,
+getLocalBandwidth <- function(X, kernel.type="epa", D=NULL, method.h=NULL, h=NULL,
                               sparse=FALSE, gc=FALSE, chunk_size=1024, alpha = 0.5){
     nObs = nrow(X)
     nEval = nObs
     
-    
-    pilotDensity = densityEst2d(X, x=X, nEval=nEval, kernel=kernel,
+    pilotDensity = densityEst2d(X, x=X, nEval=nEval, kernel.type=kernel.type,
                                 D=D, method.h=method.h, h=h, sparse=sparse,
                                 gc=gc, chunk_size=chunk_size)
-    g = exp(mean(pilotDensity$densityEst))
-    lambda = (pilotDensity$densityEst/g)^(-alpha)
+    g = exp(mean(pilotDensity$estimator))
+    lambda = (pilotDensity$estimator/g)^(-alpha)
     
     return(lambda)
 }
