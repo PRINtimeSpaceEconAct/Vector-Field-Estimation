@@ -1,5 +1,6 @@
 # Clear workspace and load dependencies
 rm(list = ls())
+DEBUG = TRUE
 source("src/libs/loadLib.R")
 suppressPackageStartupMessages(library(plotly))
 
@@ -18,10 +19,10 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 # ---- Density Estimation Tests ----
 # Test adaptive bandwidth density estimation
 alpha = 0.5
-est <- densityEst2dAdaptive(X_0, x=x, kernel="gauss", sparse=FALSE, gc=TRUE, alpha=alpha)
+est <- densityEst2dAdaptive(X_0, x=x, kernel="gauss", sparse=FALSE, gc=TRUE, alpha = alpha)
 
 # Monitor memory usage
-print(Sys.procmem())
+# print(Sys.procmem())
 
 # Visualize adaptive density estimate
 xCoord = est$x[,1]
@@ -42,6 +43,7 @@ print(paste("sm package bandwidth:", est.sm$h))
 
 # Visualize difference between implementations
 z = est.sm$estimate - est$densityEst
+# z = sign(z)*log10(abs(z))
 print(plot_ly(x=xCoord, y=yCoord, z=z, intensity=z, type="mesh3d") %>%
     layout(title=paste("Density Estimation: sm package vs Custom Adaptive (alpha =", alpha, ")"),
            scene=list(
@@ -101,7 +103,7 @@ print(plot_ly() %>%
 # Calculate and visualize regression error
 true_comp1 = 2*x[,1] + 1
 true_comp2 = -0.5*x[,2] + 3
-error = sqrt((est_comp1$NWest - true_comp1)^2 + (est_comp2$NWest - true_comp2)^2)
+error = est_comp1$NWest - true_comp1
 
 print(plot_ly(x=xCoord, y=yCoord, z=error, intensity=error, type="mesh3d") %>%
     layout(title="Total Regression Error (Euclidean Distance)",
