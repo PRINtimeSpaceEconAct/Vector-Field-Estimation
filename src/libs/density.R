@@ -82,6 +82,7 @@ getLocalBandwidth <- function(X, kernel="epa", D=NULL, method.h=NULL, h=NULL,
                             sparse=FALSE, gc=FALSE, chunk_size=1024, alpha = 0.5){
     nObs = nrow(X)
     nEval = nObs
+    
 
     pilotDensity = densityEst2d(X, x=X, nEval=nEval, kernel=kernel,
                                 D=D, method.h=method.h, h=h, sparse=sparse,

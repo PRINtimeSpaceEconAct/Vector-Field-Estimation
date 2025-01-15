@@ -6,6 +6,7 @@ suppressPackageStartupMessages(library(plotly))
 
 # Generate random normal data
 nObs = 10000
+set.seed(123)
 X_0 = matrix(nrow=nObs,rnorm(2*nObs))
 
 # Create evaluation grid
@@ -15,7 +16,7 @@ yGrid = seq(from=min(X_0[,2]),to=max(X_0[,2]),length.out=round(sqrt(nEval)))
 x = as.matrix(expand.grid(xGrid,yGrid))
 
 # Adaptive bandwidth parameter
-alpha = 0
+alpha = 0.5
 
 # Test the adaptive bandwidth density estimation using Gaussian kernel
 est <- densityEst2dAdaptive(X_0,x=x, kernel = "gauss", sparse=FALSE,gc=TRUE, alpha = alpha)
@@ -42,17 +43,16 @@ print(plot_ly(x = xCoord, y = yCoord, z = z, intensity = z, type = "mesh3d") %>%
 
 # Create synthetic target data with affine transformations plus noise
 X_1 = matrix(nrow=nObs, ncol=2)
-X_1[,1] = 2*X_0[,1] + 1  # First component: 2x + 1 + noise
-X_1[,2] = -0.5*X_0[,2] + 3  # Second component: -0.5x + 3 + noise
+X_1[,1] = 2*X_0[,1] + 1  # First component: 2x + 1 
+X_1[,2] = -0.5*X_0[,2] + 3  # Second component: -0.5x + 3
 
 
 # Predict each component using NW regression
 est_comp1 = NWregression(X_0, X_1[,1], x=x, h=0.5, kernel="gauss", sparse=FALSE, gc=TRUE)
 est_comp2 = NWregression(X_0, X_1[,2], x=x, h=0.5, kernel="gauss", sparse=FALSE, gc=TRUE)
 
-# Calculate true values at grid points (without noise)
-true_comp1 = 2*x[,1] + 1
-true_comp2 = -0.5*x[,2] + 3
+#est_comp1 = NWregressionAdaptive(X_0, X_1[,1], x=x, alpha=0.5, kernel="gauss", sparse=FALSE, gc=TRUE)
+#est_comp2 = NWregressionAdaptive(X_0, X_1[,2], x=x, alpha=0.5, kernel="gauss", sparse=FALSE, gc=TRUE)
 
 print(plot_ly() %>%
     add_trace(x=est_comp1$x[,1], y=est_comp1$NWest, name="Predicted", mode="markers") %>%
@@ -67,3 +67,19 @@ print(plot_ly() %>%
     layout(title = "NW Regression: Second Component (-0.5x + 3)",
            xaxis = list(title = "X"),
            yaxis = list(title = "Y")))
+
+# Calculate true values on the evaluation grid
+true_comp1 = 2*x[,1] + 1
+true_comp2 = -0.5*x[,2] + 3
+
+# Calculate total squared error at each point
+error = sqrt((est_comp1$NWest - true_comp1)^2 + (est_comp2$NWest - true_comp2)^2)
+
+# Create 3D surface plot of the error
+print(plot_ly(x = xCoord, y = yCoord, z = error, intensity = error, type = "mesh3d") %>%
+    layout(title = "Total Regression Error (Euclidean Distance)",
+           scene = list(
+               zaxis = list(title = "Error"),
+               xaxis = list(title = "X"),
+               yaxis = list(title = "Y")
+           )))

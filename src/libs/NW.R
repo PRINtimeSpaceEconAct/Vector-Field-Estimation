@@ -11,7 +11,7 @@ NWregression <- function(X, Y, x=NULL, nEval=2500, kernel="epa", D=NULL,
     
     # Compute numerator (sum of Y_i * K_h)
     numerator = densityEst2d(X, x=x, nEval=nEval, kernel=kernel, D=D, 
-                            method.h=method.h, h=h,
+                            method.h=method.h, h=h, lambda=lambda,
                             sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y)
     
     # Compute denominator (sum of K_h)
