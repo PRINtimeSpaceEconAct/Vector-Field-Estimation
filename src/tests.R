@@ -8,7 +8,7 @@ suppressPackageStartupMessages(library(sm))
 suppressPackageStartupMessages(library(mvtnorm))
 # ---- Data Generation ----
 # Generate random normal data for source distribution
-nObs = 1000
+nObs = 10000
 set.seed(123)
 X_0_Gauss = matrix(nrow=nObs, rnorm(2*nObs))
 
