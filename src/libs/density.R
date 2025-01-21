@@ -16,7 +16,6 @@ densityEst2dAdaptive <- function(X, x=NULL, nEval=2500, kernel.type="epa", D=NUL
 
     lambda = getLocalBandwidth(X, kernel.type=kernel.type, D=D, method.h=method.h, h=h,
                                 sparse=sparse, gc=gc, chunk_size=chunk_size, alpha = alpha)
-
     est = densityEst2d(X, x=x, nEval=nEval, kernel.type=kernel.type, D=D, method.h=method.h,
                         h=h, lambda=lambda, sparse=sparse, gc=gc, chunk_size=chunk_size)
     return(est)

@@ -91,7 +91,7 @@ define_h_method.h <- function(X,h,method.h){
     } else if (is.null(method.h)) {
         # Default method when both h and method.h are null
         method.h = "silverman"
-        h =  nrow(X)^(-1/6)
+        h =  0.96 * nrow(X)^(-1/6)
     } else {
         # Select h based on specified method
         h = switch(method.h,
@@ -121,7 +121,7 @@ getLocalBandwidth <- function(X, kernel.type="epa", D=NULL, method.h=NULL, h=NUL
     pilotDensity = densityEst2d(X, x=X, nEval=nEval, kernel.type=kernel.type,
                                 D=D, method.h=method.h, h=h, sparse=sparse,
                                 gc=gc, chunk_size=chunk_size)
-    g = exp(mean(pilotDensity$estimator))
+    g = exp(mean(log(pilotDensity$estimator)))
     lambda = (pilotDensity$estimator/g)^(-alpha)
     
     return(lambda)

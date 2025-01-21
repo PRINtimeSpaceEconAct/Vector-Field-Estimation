@@ -2,12 +2,13 @@
 rm(list = ls())
 DEBUG = TRUE
 source("src/libs/loadLib.R")
+source("src/libs/codeMunicipalities.R")
 suppressPackageStartupMessages(library(plotly))
 suppressPackageStartupMessages(library(sm))
 suppressPackageStartupMessages(library(mvtnorm))
 # ---- Data Generation ----
 # Generate random normal data for source distribution
-nObs = 10000
+nObs = 1000
 set.seed(123)
 X_0_Gauss = matrix(nrow=nObs, rnorm(2*nObs))
 
@@ -32,7 +33,7 @@ print("================================================")
 print("Estimating a standard Gaussian")
 bandwidth = 0.5
 print(paste(" Gaussian kernel", "bandwidth =", bandwidth))
-estGaussian <- densityEst2d(X_0_Gauss, x=x, h=bandwidth, kernel="gauss", sparse=FALSE, gc=TRUE)
+estGaussian <- densityEst2d(X_0_Gauss, x=x, h=bandwidth, kernel.type = "gauss", sparse=FALSE, gc=TRUE)
 estGaussian.sm <- sm.density(X_0_Gauss, h=c(bandwidth, bandwidth), eval.points=x, eval.grid=FALSE, nbins=0)
 print(paste("Maximum absolute difference between sm and custom:", max(abs(estGaussian$estimator - estGaussian.sm$estimate))))
 # Test adaptive bandwidth density estimation
@@ -50,6 +51,19 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
                xaxis=list(title="X"),
                yaxis=list(title="Y")
            )))
+
+# Estimate the density with the municipalities code
+estMunicipalities <- normKernelBivAdaptive(x, X_0_Gauss, alpha = alpha)
+# Plot the difference between the adaptive and the municipalities code
+z_diff = estMunicipalities - estAdaptive$estimator
+print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
+    layout(title="Difference between adaptive and municipalities code",
+           scene=list(
+               zaxis=list(title="Difference"),
+               xaxis=list(title="X"),
+               yaxis=list(title="Y")
+           )))
+
 print("================================================")
 print("We now test our estimation against a bimodal distribution")
 # Generate bimodal data from mixture of two normals
