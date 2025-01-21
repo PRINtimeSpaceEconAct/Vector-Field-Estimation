@@ -1,4 +1,4 @@
-NWregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="epa", D=NULL, 
+NWregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                         method.h=NULL, h=NULL, lambda = NULL, 
                         sparse=FALSE, gc=FALSE, chunk_size=nrow(x)) {
 
@@ -11,7 +11,7 @@ NWregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="epa", D=NULL,
 }
 
 # Adaptive bandwidth version of NW regression
-NWregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel="epa", D=NULL,
+NWregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel="gauss", D=NULL,
                                 method.h=NULL, h=NULL,
                                 sparse=FALSE, gc=FALSE, chunk_size=1024, alpha = 0.5) {
     

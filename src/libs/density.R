@@ -1,4 +1,4 @@
-densityEst2d <- function(X, x=NULL, nEval=2500, kernel.type="epa", D=NULL, 
+densityEst2d <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                           method.h=NULL, h=NULL, lambda=NULL, 
                           sparse=FALSE, gc=FALSE, chunk_size=nrow(x)) {
     
@@ -10,7 +10,7 @@ densityEst2d <- function(X, x=NULL, nEval=2500, kernel.type="epa", D=NULL,
 
 }
     
-densityEst2dAdaptive <- function(X, x=NULL, nEval=2500, kernel.type="epa", D=NULL,
+densityEst2dAdaptive <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                                 method.h=NULL, h=NULL,
                                 sparse=FALSE, gc=FALSE, chunk_size=nrow(X), alpha = 0.5){
 
