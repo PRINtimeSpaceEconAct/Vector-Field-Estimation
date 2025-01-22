@@ -240,9 +240,10 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
 
 # ---- Regression Tests ----
 # Generate synthetic target data with known transformations
-X_1 = matrix(nrow=nObs, ncol=1)
-X_1[,1] = 2*X_0_Gauss[,1] + 1      # First component: linear transformation y = 2x + 1 
-target = 2*x[,1] + 1
+X_1 = matrix(nrow=nObs, ncol=2)
+X_1[,1] = 0.5*X_0_Gauss[,1]     # First component: linear transformation y = 2x + 1 
+X_1[,2] = 0.5*X_0_Gauss[,2]     # Second component: linear transformation y = 3x + 2
+target = 0.5*x[,1]
 
 # Nadaraya-Watson regression for each component
 est_comp = NWregression(X_0_Gauss, X_1[,1], x=x, h=0.5, kernel.type="gauss", sparse=FALSE, gc=TRUE)
@@ -276,7 +277,7 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
                yaxis=list(title="Y")
            )))
 
-est_comp_adaptive = NWregressionAdaptive(X_0_Gauss, X_1[,1], x=x, kernel.type="gauss", sparse=FALSE, gc=TRUE, alpha=0.5)
+est_comp_adaptive = NWregressionAdaptive(X_0_Gauss, X_1[,1], x=x, kernel.type="gauss", chunk_size=1024, sparse=FALSE, gc=TRUE, alpha=0.5)
 
 z_diff = target - est_comp_adaptive$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
@@ -286,3 +287,19 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
                xaxis=list(title="X"),
                yaxis=list(title="Y")
            )))
+
+est_field_adaptive = NWfieldAdaptive(X_0_Gauss, X_1, nEval=100, kernel.type="gauss", chunk_size=1024, sparse=FALSE, gc=TRUE, alpha=0.5)
+# Create a 2D vector field plot
+plot(est_field_adaptive$x, type = "n", 
+     xlab = "X", ylab = "Y",
+     main = "Estimated Vector Field")
+
+# Add arrows to represent the vector field
+arrows(est_field_adaptive$x[,1], est_field_adaptive$x[,2],
+       est_field_adaptive$x[,1] + est_field_adaptive$estimator[,1], 
+       est_field_adaptive$x[,2] + est_field_adaptive$estimator[,2],
+       length = 0.1, # arrow head length
+       angle = 15,   # arrow head angle
+       col = "blue")
+
+
