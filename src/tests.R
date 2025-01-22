@@ -45,7 +45,7 @@ print(paste("Maximum absolute difference between true and adaptive estimate:", m
 
 z_diff = trueGaussian - estAdaptive$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-    layout(title="Difference between true and adaptive estimate",
+    layout(title="Difference: True Standard Gaussian - Adaptive Bandwidth Estimate",
            scene=list(
                zaxis=list(title="Difference"),
                xaxis=list(title="X"),
@@ -57,7 +57,7 @@ estMunicipalities <- normKernelBivAdaptive(x, X_0_Gauss, alpha = alpha)
 # Plot the difference between the adaptive and the municipalities code
 z_diff = estMunicipalities - estAdaptive$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-    layout(title="Difference between adaptive and municipalities code",
+    layout(title="Difference: Municipalities Implementation (Standard Gaussian) - Custom Adaptive",
            scene=list(
                zaxis=list(title="Difference"),
                xaxis=list(title="X"),
@@ -89,14 +89,14 @@ X_0_Bimodal = rbind(
 
 # True density for comparison
 trueBimodal = 0.5 * dmvnorm(x, mean1, sigma1) + 0.5 * dmvnorm(x, mean2, sigma2)
-# Plot the true density
-print(plot_ly(x=x[,1], y=x[,2], z=trueBimodal, intensity=trueBimodal, type="mesh3d") %>%
-    layout(title="True Bimodal Density",
-           scene=list(
-               zaxis=list(title="Density"),
-               xaxis=list(title="X"),
-               yaxis=list(title="Y")
-           )))
+# # Plot the true density
+# print(plot_ly(x=x[,1], y=x[,2], z=trueBimodal, intensity=trueBimodal, type="mesh3d") %>%
+#     layout(title="True Bimodal Density",
+#            scene=list(
+#                zaxis=list(title="Density"),
+#                xaxis=list(title="X"),
+#                yaxis=list(title="Y")
+#            )))
            
 # Scatter plot of the bimodal data
 print(plot_ly(x=X_0_Bimodal[,1], y=X_0_Bimodal[,2], type="scatter", mode="markers", marker=list(size=2, opacity=0.6)) %>%
@@ -106,19 +106,19 @@ print(plot_ly(x=X_0_Bimodal[,1], y=X_0_Bimodal[,2], type="scatter", mode="marker
 
 print("Estimating the bimodal density")
 estBimodal <- densityEst2d(X_0_Bimodal, x=x, kernel="gauss", sparse=FALSE, gc=TRUE)
-# Plot the estimated density
-print(plot_ly(x=x[,1], y=x[,2], z=estBimodal$estimator, intensity=estBimodal$estimator, type="mesh3d") %>%
-    layout(title="Estimated Bimodal Density",
-           scene=list(
-               zaxis=list(title="Density"),
-               xaxis=list(title="X"),
-               yaxis=list(title="Y")
-           )))
+# # Plot the estimated density
+# print(plot_ly(x=x[,1], y=x[,2], z=estBimodal$estimator, intensity=estBimodal$estimator, type="mesh3d") %>%
+#     layout(title="Estimate: Mixture of Two Gaussians - Fixed Bandwidth Estimate",
+#            scene=list(
+#                zaxis=list(title="Difference"),
+#                xaxis=list(title="X"),
+#                yaxis=list(title="Y")
+#            )))
 
 # Plot the difference between the true and estimated density
 z_diff = trueBimodal - estBimodal$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-    layout(title="Difference between true and estimated density",
+    layout(title="Difference: Mixture of Two Gaussians - Fixed Bandwidth Estimate (Silverman)",
            scene=list(
                zaxis=list(title="Difference"),
                xaxis=list(title="X"),
@@ -128,19 +128,19 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
 print("Estimating the bimodal density with adaptive bandwidth")
 alpha = 0.5
 estBimodalAdaptive <- densityEst2dAdaptive(X_0_Bimodal, x=x, kernel.type="gauss", sparse=FALSE, gc=TRUE, chunk_size=1024, alpha=alpha)
-# Plot the estimated density
-print(plot_ly(x=x[,1], y=x[,2], z=estBimodalAdaptive$estimator, intensity=estBimodalAdaptive$estimator, type="mesh3d") %>%
-    layout(title="Estimated Bimodal Density with Adaptive Bandwidth",
-           scene=list(
-               zaxis=list(title="Density"),
-               xaxis=list(title="X"),
-               yaxis=list(title="Y")
-           )))
+# # Plot the estimated density
+# print(plot_ly(x=x[,1], y=x[,2], z=estBimodalAdaptive$estimator, intensity=estBimodalAdaptive$estimator, type="mesh3d") %>%
+#     layout(title="Estimated Bimodal Density with Adaptive Bandwidth",
+#            scene=list(
+#                zaxis=list(title="Density"),
+#                xaxis=list(title="X"),
+#                yaxis=list(title="Y")
+#            )))
 
 # Plot the difference between the true and estimated density
 z_diff = trueBimodal - estBimodalAdaptive$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-    layout(title="Difference between true and estimated density with adaptive bandwidth",
+    layout(title="Difference: Mixture of Two Gaussians - Adaptive Bandwidth Estimate",
            scene=list(
                zaxis=list(title="Difference"),
                xaxis=list(title="X"),
@@ -180,14 +180,14 @@ X_0_Trimodal = rbind(
 
 # True density for comparison
 trueTrimodal = (1/3) * dmvnorm(x, mean1, sigma1) + (1/3) * dmvnorm(x, mean2, sigma2) + (1/3) * dmvnorm(x, mean3, sigma3)
-# Plot the true density
-print(plot_ly(x=x[,1], y=x[,2], z=trueTrimodal, intensity=trueTrimodal, type="mesh3d") %>%
-    layout(title="True Trimodal Density",
-           scene=list(
-               zaxis=list(title="Density"),
-               xaxis=list(title="X"),
-               yaxis=list(title="Y")
-           )))
+# # Plot the true density
+# print(plot_ly(x=x[,1], y=x[,2], z=trueTrimodal, intensity=trueTrimodal, type="mesh3d") %>%
+#     layout(title="True Trimodal Density",
+#            scene=list(
+#                zaxis=list(title="Density"),
+#                xaxis=list(title="X"),
+#                yaxis=list(title="Y")
+#            )))
            
 # Scatter plot of the trimodal data
 print(plot_ly(x=X_0_Trimodal[,1], y=X_0_Trimodal[,2], type="scatter", mode="markers", marker=list(size=2, opacity=0.6)) %>%
@@ -198,18 +198,18 @@ print(plot_ly(x=X_0_Trimodal[,1], y=X_0_Trimodal[,2], type="scatter", mode="mark
 print("Estimating the trimodal density")
 estTrimodal <- densityEst2d(X_0_Trimodal, x=x, kernel="gauss", sparse=FALSE, gc=TRUE)
 # Plot the estimated density
-print(plot_ly(x=x[,1], y=x[,2], z=estTrimodal$estimator, intensity=estTrimodal$estimator, type="mesh3d") %>%
-    layout(title="Estimated Trimodal Density",
-           scene=list(
-               zaxis=list(title="Density"),
-               xaxis=list(title="X"),
-               yaxis=list(title="Y")
-           )))
+# print(plot_ly(x=x[,1], y=x[,2], z=estTrimodal$estimator, intensity=estTrimodal$estimator, type="mesh3d") %>%
+#     layout(title="Difference: Mixture of Three Gaussians - Fixed Bandwidth Estimate",
+#            scene=list(
+#                zaxis=list(title="Difference"),
+#                xaxis=list(title="X"),
+#                yaxis=list(title="Y")
+#            )))
 
 # Plot the difference between the true and estimated density
 z_diff = trueTrimodal - estTrimodal$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-    layout(title="Difference between true and estimated density",
+    layout(title="Difference: Mixture of Three Gaussians - Fixed Bandwidth Estimate (Silverman)",
            scene=list(
                zaxis=list(title="Difference"),
                xaxis=list(title="X"),
@@ -219,19 +219,19 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
 print("Estimating the trimodal density with adaptive bandwidth")
 alpha = 0.5
 estTrimodalAdaptive <- densityEst2dAdaptive(X_0_Trimodal, x=x, kernel.type="gauss", sparse=FALSE, gc=TRUE, chunk_size=1024, alpha=alpha)
-# Plot the estimated density
-print(plot_ly(x=x[,1], y=x[,2], z=estTrimodalAdaptive$estimator, intensity=estTrimodalAdaptive$estimator, type="mesh3d") %>%
-    layout(title="Estimated Trimodal Density with Adaptive Bandwidth",
-           scene=list(
-               zaxis=list(title="Density"),
-               xaxis=list(title="X"),
-               yaxis=list(title="Y")
-           )))
+# # Plot the estimated density
+# print(plot_ly(x=x[,1], y=x[,2], z=estTrimodalAdaptive$estimator, intensity=estTrimodalAdaptive$estimator, type="mesh3d") %>%
+#     layout(title="Estimated Trimodal Density with Adaptive Bandwidth",
+#            scene=list(
+#                zaxis=list(title="Density"),
+#                xaxis=list(title="X"),
+#                yaxis=list(title="Y")
+#            )))
 
 # Plot the difference between the true and estimated density
 z_diff = trueTrimodal - estTrimodalAdaptive$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-    layout(title="Difference between true and estimated density with adaptive bandwidth",
+    layout(title="Difference: Mixture of Three Gaussians - Adaptive Bandwidth Estimate",
            scene=list(
                zaxis=list(title="Difference"),
                xaxis=list(title="X"),
@@ -257,9 +257,9 @@ np_est <- npreg(bws=np_bw,
                 exdat=x)
 
 # Make a 3D plot with the difference between the two estimators
-z_diff = est_comp$estimator - np_est$mean
+z_diff = np_est$mean - est_comp$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-    layout(title="Difference between Custom NW and np package (h=0.5)",
+    layout(title="Difference: np Package Implementation - Custom NW ",
            scene=list(
                zaxis=list(title="Difference"),
                xaxis=list(title="X"),
@@ -267,9 +267,9 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
            )))
 
 # Make a 3D plot with the difference between the true target and the estimated target
-z_diff = np_est$mean - target
+z_diff = target - np_est$mean
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-    layout(title="Difference between true target and estimated target",
+    layout(title="Difference: True Linear Transform - np Package Estimate",
            scene=list(
                zaxis=list(title="Difference"),
                xaxis=list(title="X"),
@@ -278,9 +278,9 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
 
 est_comp_adaptive = NWregressionAdaptive(X_0_Gauss, X_1[,1], x=x, kernel.type="gauss", sparse=FALSE, gc=TRUE, alpha=0.5)
 
-z_diff = est_comp_adaptive$estimator - target
+z_diff = target - est_comp_adaptive$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-    layout(title="Difference between Custom NW and np package (h=0.5)",
+    layout(title="Difference: True Linear Transform - Adaptive NW Estimate",
            scene=list(
                zaxis=list(title="Difference"),
                xaxis=list(title="X"),
