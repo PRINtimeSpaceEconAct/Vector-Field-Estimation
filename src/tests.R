@@ -242,6 +242,7 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
 # Generate synthetic target data with known transformations
 X_1 = matrix(nrow=nObs, ncol=1)
 X_1[,1] = 2*X_0_Gauss[,1] + 1      # First component: linear transformation y = 2x + 1 
+target = 2*x[,1] + 1
 
 # Nadaraya-Watson regression for each component
 est_comp = NWregression(X_0_Gauss, X_1[,1], x=x, h=0.5, kernel.type="gauss", sparse=FALSE, gc=TRUE)
@@ -265,3 +266,23 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
                yaxis=list(title="Y")
            )))
 
+# Make a 3D plot with the difference between the true target and the estimated target
+z_diff = np_est$mean - target
+print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
+    layout(title="Difference between true target and estimated target",
+           scene=list(
+               zaxis=list(title="Difference"),
+               xaxis=list(title="X"),
+               yaxis=list(title="Y")
+           )))
+
+est_comp_adaptive = NWregressionAdaptive(X_0_Gauss, X_1[,1], x=x, kernel.type="gauss", sparse=FALSE, gc=TRUE, alpha=0.5)
+
+z_diff = est_comp_adaptive$estimator - target
+print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
+    layout(title="Difference between Custom NW and np package (h=0.5)",
+           scene=list(
+               zaxis=list(title="Difference"),
+               xaxis=list(title="X"),
+               yaxis=list(title="Y")
+           )))
