@@ -1,8 +1,8 @@
 # Clear workspace and load dependencies
 rm(list = ls())
 DEBUG = TRUE
-source("libs/loadLib.R")
-source("libs/codeMunicipalities.R")
+source("src/libs/loadLib.R")
+source("src/libs/codeMunicipalities.R")
 suppressPackageStartupMessages(library(plotly))
 suppressPackageStartupMessages(library(sm))
 suppressPackageStartupMessages(library(mvtnorm))
@@ -23,12 +23,21 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 # ---- Regression Tests ----
 # Generate synthetic target data with known transformations
 X_1 = matrix(nrow=nObs, ncol=2)
-X_1[,1] = 0.5*X_0_Gauss[,1]     # First component: linear transformation y = 2x + 1 
+X_1[,1] = 0.5*X_0_Gauss[,1]^2     # First component: linear transformation y = 2x + 1 
 X_1[,2] = 0.5*X_0_Gauss[,2]     # Second component: linear transformation y = 3x + 2
-target = 0.5*x[,1]
+target = 0.5*x[,1]^2
 
 # Nadaraya-Watson regression for each component
-est_comp = NWregression(X_0_Gauss, X_1[,1], x=x, h=0.5, kernel.type="gauss", sparse=FALSE, gc=TRUE)
+est_comp = NWregression(X_0_Gauss, X_1[,1], x=x, h=0.5, chunk_size=1024, kernel.type="gauss", sparse=FALSE, gc=TRUE)
+est_comp_LL = LLregression(X_0_Gauss, X_1[,1], x=x, h=0.5, chunk_size=1024, kernel.type="gauss", sparse=FALSE, gc=TRUE)
+
+# Do a scatter plot of the forecasted values
+plot_ly(x=est_comp$x[,1], y=est_comp$estimator, type="scatter", mode="markers") %>%
+    add_lines(x=x[,1], y=target, type="scatter", mode="lines")
+
+# Do a scatter plot of the forecasted values
+plot_ly(x=est_comp_LL$x[,1], y=est_comp_LL$estimator, type="scatter", mode="markers") %>%
+    add_lines(x=x[,1], y=target, type="scatter", mode="lines")
 
 # Compare with np package implementation using fixed bandwidth
 suppressPackageStartupMessages(library(np))

@@ -52,9 +52,11 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         # switch between density, NW
         switch(type.est,
                "density" = {
-                   estimator[chunk] = computeTerms(Z, Y, h, detS, K_scaled, type.est) },
+                   estimator[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est) },
                "NW" = {
-                   estimator[chunk] = computeTerms(Z, Y, h, detS, K_scaled, type.est) },
+                   estimator[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est) },
+               "LL" = {
+                   estimator[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est) },
                {
                    stop(paste("Invalid type.est:", type.est, ". Must be either 'density' or 'NW'."))
                }
@@ -67,8 +69,10 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 
 
 
-computeTerms <- function(X, Y, h, detS, K_scaled, type.est){
-    nObs = nrow(X)
+computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
+    nObs = dim(distances$z1)[1]
+    d1 = distances$z1
+    d2 = distances$z2
 
     switch(type.est,
         "density" = {
@@ -76,8 +80,25 @@ computeTerms <- function(X, Y, h, detS, K_scaled, type.est){
         },
         "NW" = {
             K_scaledY = sweep(K_scaled, 1, Y, "*")
-            numerator = 1/(nObs * h^2 * sqrt(detS)) * colSums(K_scaledY)
-            denominator = 1/(nObs * h^2 * sqrt(detS)) * colSums(K_scaled)
+            numerator = colSums(K_scaledY)
+            denominator = colSums(K_scaled)
+            return(numerator/denominator)
+        },
+        "LL" = {
+            K_scaledY = sweep(K_scaled, 1, Y, "*")
+
+            S0 = colSums(K_scaled)
+            S10 = colSums(K_scaled * d1)
+            S20 = colSums(K_scaled * d2)
+            S12 = colSums(K_scaled * d1 * d2)
+            S11 = colSums(K_scaled * d1^2)
+            S22 = colSums(K_scaled * d2^2)
+            T0 = colSums(K_scaledY)
+            T1 = colSums(K_scaledY * d1)
+            T2 = colSums(K_scaledY * d2)
+            
+            numerator = determinant3(T0, S10, S20, T1, S11, S12, T2, S12, S22)
+            denominator = determinant3(S0, S10, S20, S10, S11, S12, S20, S12, S22)
             return(numerator/denominator)
         }
     )
