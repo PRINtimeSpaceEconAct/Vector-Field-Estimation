@@ -9,7 +9,7 @@ nObs = 10000
 nEval = 2500
 
 # data Generation ----
-X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 0.1*diag(2))
+X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 1*diag(2))
 
 # eval points
 xGrid = seq(from=-1, to=1, length.out=round(sqrt(nEval)))

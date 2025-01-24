@@ -10,7 +10,12 @@ suppressPackageStartupMessages(library(mvtnorm))
 # Generate random normal data for source distribution
 nObs = 10000
 set.seed(123)
-X_0_Gauss = matrix(nrow=nObs, rnorm(2*nObs))
+# Sigma = matrix(c(1, 0, 0, 1), nrow=2)
+Sigma = matrix(c(0.75, 0.5, 0.5, 0.75), nrow=2)
+
+X_0_Gauss = mvrnorm(nObs, mu=c(0,0),Sigma = Sigma)
+
+
 
 # Create evaluation grid for density estimation and regression
 nEval = 2500
@@ -19,8 +24,7 @@ yGrid = seq(from=min(X_0_Gauss[,2]), to=max(X_0_Gauss[,2]), length.out=round(sqr
 x = as.matrix(expand.grid(xGrid, yGrid))
 
 mean = c(0, 0)
-sigma = matrix(c(1, 0, 0, 1), nrow=2)
-trueGaussian = dmvnorm(x, mean, sigma)
+trueGaussian = dmvnorm(x, mean, Sigma)
 
 # ---- Density Estimation Tests ----
 

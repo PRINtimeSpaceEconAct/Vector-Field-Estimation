@@ -1,29 +1,31 @@
 kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
-                         method.h=NULL, h=NULL, lambda=NULL, 
-                         sparse=FALSE, gc=FALSE, chunk_size=nrow(x), type.est=NULL, Y=NULL) {
+                             method.h=NULL, h=NULL, lambda=NULL, 
+                             sparse=FALSE, gc=FALSE, chunk_size=nrow(x), type.est=NULL, Y=NULL) {
     
     nObs = nrow(X)
     covX = cov(X)
     invS = solve(covX)
+    sqrtinvS = sqrtm(solve(covX))
     detS = det(covX)
     
     if (is.null(x)) { x = defineEvalPoints(X,nEval) }
     nEval =  nrow(x)
     if (DEBUG) {
         print(paste("nEval: ",nEval))
-        print(paste("nObs: ",nObs))
-    }
+        print(paste("nObs: ",nObs)) }
     if (is.null(chunk_size)) { chunk_size = nrow(x) }
     if (is.null(lambda)) { lambda = rep(1,nObs) }
-
+    
     if (is.null(type.est)) { stop("type.est not specified") }
     if (is.null(h) | is.null(method.h)) { 
         list.h = define_h_method.h(X,h,method.h, kernel.type)
         h = list.h$h
         method.h = list.h$method.h }
     kernelFunction = defineKernel(kernel.type)
-
-        
+    
+    Z = X %*% sqrtinvS
+    z = x %*% sqrtinvS
+    
     estimator = numeric(nEval)
     chunks = split(seq_len(nEval), ceiling(seq_len(nEval)/chunk_size))
     if (DEBUG) {
@@ -35,10 +37,10 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         if (DEBUG) print(paste("Computing chunk ",i,"/",length(chunks),sep=""))
         
         chunk = chunks[[i]]
-        x_chunk = x[chunk, , drop=FALSE]
+        z_chunk = z[chunk, , drop=FALSE]
         
-        D_chunk = computeDcomponents(X, x_chunk, sparse=sparse) 
-        M = mahalanobis(D_chunk$z1, D_chunk$z2, A=invS, den=h^2 * lambda^2)
+        D_chunk = computeDcomponents(Z, z_chunk, sparse=sparse) 
+        M = mahalanobis(D_chunk$z1, D_chunk$z2, A=diag(2), den=h^2 * lambda^2)
         # Kernel computation
         K = kernelFunction(M)
         if (gc == TRUE){ gc() }
@@ -49,19 +51,21 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         
         # switch between density, NW
         switch(type.est,
-            "density" = {
-                estimator[chunk] = computeTerms(X, Y, h, detS, K_scaled, type.est) },
-            "NW" = {
-                estimator[chunk] = computeTerms(X, Y, h, detS, K_scaled, type.est) },
-            {
-                stop(paste("Invalid type.est:", type.est, ". Must be either 'density' or 'NW'."))
-            }
+               "density" = {
+                   estimator[chunk] = computeTerms(Z, Y, h, detS, K_scaled, type.est) },
+               "NW" = {
+                   estimator[chunk] = computeTerms(Z, Y, h, detS, K_scaled, type.est) },
+               {
+                   stop(paste("Invalid type.est:", type.est, ". Must be either 'density' or 'NW'."))
+               }
         )
         if (gc == TRUE){ gc() }
     }
     
     return(listN(x, estimator))
 }
+
+
 
 computeTerms <- function(X, Y, h, detS, K_scaled, type.est){
     nObs = nrow(X)
@@ -148,6 +152,4 @@ gaussKernel <- function(z){
     # to be computed on z S^-1 z
     1/(2*pi)*exp(-z/2)
 }
-
-
 

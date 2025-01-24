@@ -3,7 +3,7 @@ library(Matrix)
 library(spatstat)
 library(provenance)
 library(MASS)
-
+library(expm)
 
 source("libs/utils.R")
 source("libs/distances.R")

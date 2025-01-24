@@ -51,7 +51,7 @@ computeDcomponents <- function(X,x,A=NULL,dMax=NULL,sparse=TRUE){
 
 mahalanobis <- function(z1,z2,A,den){
     # z1,z2 = matrices of differences on both components (nObs x nEval)
-    # A matrix of covariance of observations (2 x 2)
+    # A inverse of covariance matrix of observations (2 x 2)
     # den vector of length nObs for denominators
 
     nObs = nrow(z1)
