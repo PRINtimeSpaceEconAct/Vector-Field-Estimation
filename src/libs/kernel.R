@@ -28,8 +28,9 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     chunks = split(seq_len(nEval), ceiling(seq_len(nEval)/chunk_size))
     if (DEBUG) {
         print(paste("Computing ",length(chunks)," chunks"))
-        print(paste("Chunk size: ",chunk_size))
-    }
+        print(paste("Chunk size: ",chunk_size)) }
+    
+    # start estimate
     for(i in 1:length(chunks)) {
         if (DEBUG) print(paste("Computing chunk ",i,"/",length(chunks),sep=""))
         
