@@ -1,3 +1,9 @@
 .DS_Store
 src/.Rhistory
+*.csv
+*.RData
+.Rhistory
+.gitignore
+datasets/.Rapp.history
+
 

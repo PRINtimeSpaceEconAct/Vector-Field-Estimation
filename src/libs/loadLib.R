@@ -4,6 +4,7 @@ library(spatstat)
 library(provenance)
 library(MASS)
 library(expm)
+library(emdbook)
 
 source("src/libs/utils.R")
 source("src/libs/distances.R")

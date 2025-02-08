@@ -1,7 +1,7 @@
 # Clear workspace and load dependencies
 rm(list = ls())
 DEBUG = TRUE
-source("libs/loadLib.R")
+source("src/libs/loadLib.R")
 
 
 # parameters ----
@@ -45,6 +45,10 @@ t0 = Sys.time()
 est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "sj",
                                      chunk_size=1000,
                                      sparse=FALSE, gc=TRUE, alpha=0.5)
+# est_field_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "sj",
+                                     # chunk_size=1000,
+                                     # sparse=FALSE, gc=TRUE, alpha=0.5)
+
 t = Sys.time() - t0
 
 # plot ----
