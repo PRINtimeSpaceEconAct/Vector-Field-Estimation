@@ -42,7 +42,9 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     # Stack est1$estimator and est2$estimator
     estimator = cbind(est1$estimator, est2$estimator)
     x = est1$x
-    return(listN(x, estimator))
+    density = est1$density
+    
+    return(listN(x, estimator, density))
 }
 
 LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,

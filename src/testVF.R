@@ -11,11 +11,6 @@ nEval = 2500
 # data Generation ----
 X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 1*diag(2))
 
-# eval points
-xGrid = seq(from=-1, to=1, length.out=round(sqrt(nEval)))
-yGrid = seq(from=-1, to=1, length.out=round(sqrt(nEval)))
-x = as.matrix(expand.grid(xGrid, yGrid))
-
 # example 1 - double well ----
 VF <- function(X){
     # X = (x,y)
@@ -39,16 +34,23 @@ VF <- function(X){
     return (M %*% X)
 }
 
-# stima ----
+# apply VF
 X1 = X0 + t(apply(X0, 1, VF))
+
+# eval points
+xGrid = seq(from=min(c(X0[,1],X1[,1])), to=max(c(X0[,1],X1[,1])), length.out=round(sqrt(nEval)))
+yGrid = seq(from=min(c(X0[,2],X1[,2])), to=max(c(X0[,2],X1[,2])), length.out=round(sqrt(nEval)))
+x = as.matrix(expand.grid(xGrid, yGrid))
+
+# stima ----
 t0 = Sys.time()
 est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "sj",
                                      chunk_size=1000,
                                      sparse=FALSE, gc=TRUE, alpha=0.5)
 # est_field_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "sj",
-                                     # chunk_size=1000,
-                                     # sparse=FALSE, gc=TRUE, alpha=0.5)
-
+#                                      chunk_size=1000,
+#                                      sparse=FALSE, gc=TRUE, alpha=0.5)
+est = est_field_adaptive
 t = Sys.time() - t0
 
 # plot ----
@@ -73,9 +75,12 @@ arrows(est_field_adaptive$x[,1], est_field_adaptive$x[,2],
        est_field_adaptive$x[,2] + est_field_adaptive$estimator[,2] - VFx[,2],
        length = 0.05, angle = 15, col = "red")
 
-## image errore ----
+## image errore assoluto ----
 library(fields)
 errorNorm = sqrt((est_field_adaptive$estimator[,1] - VFx[,1])^2 + (est_field_adaptive$estimator[,2] - VFx[,2])^2)
 image.plot(x = unique(x[,1]), y = unique(x[,2]), z = matrix(log10(errorNorm), nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab="x",ylab="y",main="error norm (log10)")
 
+## image errore relativo ----
+errorNormRel = sqrt((est_field_adaptive$estimator[,1] - VFx[,1])^2 + (est_field_adaptive$estimator[,2] - VFx[,2])^2)/sqrt(VFx[,1]^2 + VFx[,2]^2)
+image.plot(x = unique(x[,1]), y = unique(x[,2]), z = matrix((errorNormRel), nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab="x",ylab="y",main="error norm rel")
 
