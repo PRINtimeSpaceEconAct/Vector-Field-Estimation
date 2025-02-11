@@ -38,8 +38,8 @@ VF <- function(X){
 X1 = X0 + t(apply(X0, 1, VF))
 
 # eval points
-xGrid = seq(from=min(c(X0[,1],X1[,1])), to=max(c(X0[,1],X1[,1])), length.out=round(sqrt(nEval)))
-yGrid = seq(from=min(c(X0[,2],X1[,2])), to=max(c(X0[,2],X1[,2])), length.out=round(sqrt(nEval)))
+xGrid = seq(from=min(c(X0[,1],X1[,1]))-1, to=max(c(X0[,1],X1[,1]))+1, length.out=round(sqrt(nEval)))
+yGrid = seq(from=min(c(X0[,2],X1[,2]))-1, to=max(c(X0[,2],X1[,2]))+1, length.out=round(sqrt(nEval)))
 x = as.matrix(expand.grid(xGrid, yGrid))
 
 # stima ----
@@ -58,7 +58,6 @@ t = Sys.time() - t0
 VFx = t(apply(x, 1, VF))
 plot(x, type = "n", xlab = "X", ylab = "Y", main = "True Vector Field")
 arrows(x[,1],x[,2],x[,1]+VFx[,1],x[,2]+VFx[,2],angle=15,col="black",length=0.05)
-
 
 ## plot campo stimato ----
 plot(est_field_adaptive$x, type = "n", xlab = "X", ylab = "Y", main = "Estimated Vector Field")
@@ -83,4 +82,5 @@ image.plot(x = unique(x[,1]), y = unique(x[,2]), z = matrix(log10(errorNorm), nr
 ## image errore relativo ----
 errorNormRel = sqrt((est_field_adaptive$estimator[,1] - VFx[,1])^2 + (est_field_adaptive$estimator[,2] - VFx[,2])^2)/sqrt(VFx[,1]^2 + VFx[,2]^2)
 image.plot(x = unique(x[,1]), y = unique(x[,2]), z = matrix((errorNormRel), nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab="x",ylab="y",main="error norm rel")
+
 
