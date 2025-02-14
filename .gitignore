@@ -3,7 +3,9 @@ src/.Rhistory
 *.csv
 *.RData
 .Rhistory
+*.Rhistory
 .gitignore
 datasets/.Rapp.history
-
+*.pdf
+*.eps
 

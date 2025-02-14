@@ -4,7 +4,7 @@
 #
 # Source: Wordl Bank
 #
-# Update: February 7, 2025
+# Update: February 13, 2025
 #
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -101,7 +101,7 @@ iii.sel <- iii.sel.GDP & iii.sel.LE
 iii.sel[which(list.countries=="IRL")] <- FALSE
 iii.sel[which(list.countries=="LUX")] <- FALSE
 
-GDP.per.capita.sel <- GDP.per.capita.merge[iii.sel,(which(list.years==starting.year)):(which(list.years==final.year))]
+GDP.per.capita.sel <- log(GDP.per.capita.merge[iii.sel,(which(list.years==starting.year)):(which(list.years==final.year))])
 life.exp.sel <- life.exp.matrix[iii.sel,(which(list.years==starting.year)):(which(list.years==final.year))]
 
 est.1960 <- sm.regression(GDP.per.capita.sel[,1],life.exp.sel[,1],display="none")
@@ -110,23 +110,30 @@ est.1980 <- sm.regression(GDP.per.capita.sel[,21],life.exp.sel[,21],display="non
 est.1990 <- sm.regression(GDP.per.capita.sel[,31],life.exp.sel[,31],display="none")
 est.2000 <- sm.regression(GDP.per.capita.sel[,41],life.exp.sel[,41],display="none")
 est.2010 <- sm.regression(GDP.per.capita.sel[,51],life.exp.sel[,51],display="none")
-est.2019 <- sm.regression(GDP.per.capita.sel[,ncol(GDP.per.capita.sel)],life.exp.sel[,ncol(life.exp.sel)],display="none")
+est.2015 <- sm.regression(GDP.per.capita.sel[,(ncol(GDP.per.capita.sel)-4)],life.exp.sel[,ncol(life.exp.sel)],display="none")
 
 #h <- dpill(GDP.per.capita.sel[,1], life.exp.sel[,1])
 #fitted.1960 <- locpoly(x= GDP.per.capita.sel[,1], y = life.exp.sel[,1],degree=1,bandwidth = h)
 #lines(fitted.1960$x,fitted.1960$y,col="red",lwd=2)
+dev.new()
+op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times" 
 
-plot(GDP.per.capita.sel[,1],life.exp.sel[,1],pch=19,cex=0.25,col="red",ylim=c(30,85),xlim=c(0,100000),ylab="Life expectancy",xlab="GDP per capita PPP (international $)")
-points(GDP.per.capita.sel[,ncol(GDP.per.capita.sel)],life.exp.sel[,ncol(life.exp.sel)],pch=19,cex=0.25)
+plot(GDP.per.capita.sel[,1],life.exp.sel[,1],pch=19,cex=0.25,col="blue",ylim=c(30,85),xlim=c(6.,11.5),ylab="Life expectancy at birth",xlab="GDP per capita (PPP in million 2017 USD, log scale)")
+points(GDP.per.capita.sel[,(ncol(GDP.per.capita.sel)-4)],life.exp.sel[,ncol(life.exp.sel)],pch=19,cex=0.25,col="red")
 
-lines(est.2019$eval.points,est.2019$estimate,col="black",lwd=2)
-lines(est.1960$eval.points,est.1960$estimate,col="red",lwd=2)
-lines(est.1970$eval.points,est.1970$estimate,col="lightgray",lwd=1)
-lines(est.1980$eval.points,est.1980$estimate,col="gray",lwd=1.5)
-lines(est.1990$eval.points,est.1990$estimate,col="gray",lwd=2)
-lines(est.2000$eval.points,est.2000$estimate,col="darkgray",lwd=2.5)
-lines(est.2010$eval.points,est.2010$estimate,col="gray",lwd=3)
+lines(est.2015$eval.points,est.2015$estimate,col="red",lwd=2)
+lines(est.1960$eval.points,est.1960$estimate,col="blue",lwd=2)
+lines(est.1970$eval.points,est.1970$estimate,col="gray40",lwd=1.5)
+lines(est.1980$eval.points,est.1980$estimate,col="gray30",lwd=1.5)
+lines(est.1990$eval.points,est.1990$estimate,col="gray20",lwd=1.5)
+lines(est.2000$eval.points,est.2000$estimate,col="gray10",lwd=1.5)
+lines(est.2010$eval.points,est.2010$estimate,col="gray0",lwd=1.5)
 grid()
+legend("bottomright",c("1960","1970","1980","1990","2000","2010","2015"),col=c("blue","gray40","gray30","gray20","gray10","gray0","red"),lty=1,lwd=1.5)
+
+dev.copy2eps(file="prestonCurveDifferentYears.eps",width=7,height=7,family = "mono")
+par(op)
+
 
 #Relative values ####
 GDP.per.capita.sel.REL <- GDP.per.capita.sel/matrix(colMeans(GDP.per.capita.sel),ncol=ncol(GDP.per.capita.sel),nrow=nrow(GDP.per.capita.sel),byrow=T)

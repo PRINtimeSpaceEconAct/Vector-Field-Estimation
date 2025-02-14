@@ -6,12 +6,13 @@ source("src/libs/loadLib.R")
 library(dplyr)
 library(sm)
 
-load("datasets/datasetGDP.LE.NonOverlapping.RData")
-# load("datasets/datasetGDP.LE.Overlapping.RData")
-data = dataset.GDP.LE
-data = data %>% mutate(GDP.t0 = log(GDP.t0), GDP.t1 = log(GDP.t1))
-X0 = cbind(as.numeric(data$GDP.t0),as.numeric(data$LE.t0))
-X1 = cbind(as.numeric(data$GDP.t1),as.numeric(data$LE.t1))
+# Estimate RVF 1969-2008 ----
+load("datasets/dfJoinUSState.RData")
+dfJoin = dfJoin %>% dplyr::rename(xAct=x0, wxAct=wx0, xFut=x1, wxFut=wx1)
+dfJoin <- dfJoin %>% mutate(state = geo)
+df <- dfJoin %>% dplyr::filter((wxAct != 0) & (wxFut != 0))
+dataFirst = data.frame(geo = df$geo, xAct = df$xAct,wxAct = df$wxAct,xFut = df$xFut,wxFut = df$wxFut) 
+
 
 # data = dataset.GDP.LE.REL
 # X0 = cbind(as.numeric(data$GDP.REL.t0),as.numeric(data$LE.REL.t0))
@@ -19,33 +20,34 @@ X1 = cbind(as.numeric(data$GDP.t1),as.numeric(data$LE.t1))
 
 # draw transitions as they are ----
 dev.new()
-dataFirst = filter(data,Year.ini == min(data$Year.ini))
-plot(dataFirst$GDP.t0,dataFirst$LE.t0, type = "n", xlab = "GDP per capita (PPP in million 2017 USD)", ylab = "Life expectancy at birth", main = "",xlim=range(dataFirst$GDP.t0,dataFirst$GDP.t1),ylim=range(dataFirst$LE.t0,dataFirst$LE.t1))
-arrows(dataFirst$GDP.t0,dataFirst$LE.t0, dataFirst$GDP.t1,dataFirst$LE.t1, length = 0.15, angle = 15, col = "black")
-points(dataFirst$GDP.t0,dataFirst$LE.t0,pch=19,col="black",cex=0.5)
-points(dataFirst$GDP.t1,dataFirst$LE.t1,pch=19,col="red",cex=0.5)
+plot(dataFirst$xAct,dataFirst$wxAct, type = "n", xlab = "Relative per capita income", ylab = "Spatial lag of relative per capita income", main = "",xlim=range(dataFirst$xAct,dataFirst$xFut),ylim=range(dataFirst$wxAct,dataFirst$wxFut))
+arrows(dataFirst$xAct,dataFirst$wxAct, dataFirst$xFut,dataFirst$wxFut, length = 0.15, angle = 15, col = "black")
+points(dataFirst$xAct,dataFirst$wxAct,pch=19,col="black",cex=0.5)
+points(dataFirst$xFut,dataFirst$wxFut,pch=19,col="red",cex=0.5)
+abline(h=1)
+abline(v=1)
 grid()
-dev.copy2pdf(file="scatterArrowsPreston19601965.pdf")
+dev.copy2pdf(file="scatterArrowsUSState.pdf")
 # parameters ----
 nEval = 2500
 
 # eval points
-# xGrid = seq(from=-20000, to=1.1*max(c(X0[,1],X1[,1])), length.out=round(sqrt(nEval)))
-# yGrid = seq(from=0.9*min(c(X0[,2],X1[,2])), to=1.2*max(c(X0[,2],X1[,2])), length.out=round(sqrt(nEval)))
-# x = as.matrix(expand.grid(xGrid, yGrid))
-
-xGrid = seq(from=0.9*min(c(X0[,1],X1[,1])), to=1.1*max(c(X0[,1],X1[,1])), length.out=round(sqrt(nEval)))
-yGrid = seq(from=0.9*min(c(X0[,2],X1[,2])), to=1.1*max(c(X0[,2],X1[,2])), length.out=round(sqrt(nEval)))
+xGrid = seq(from=-20000, to=1.1*max(c(X0[,1],X1[,1])), length.out=round(sqrt(nEval)))
+yGrid = seq(from=0.9*min(c(X0[,2],X1[,2])), to=1.2*max(c(X0[,2],X1[,2])), length.out=round(sqrt(nEval)))
 x = as.matrix(expand.grid(xGrid, yGrid))
+
+# xGrid = seq(from=0.9*min(c(X0[,1],X1[,1])), to=1.1*max(c(X0[,1],X1[,1])), length.out=round(sqrt(nEval)))
+# yGrid = seq(from=0.9*min(c(X0[,2],X1[,2])), to=1.1*max(c(X0[,2],X1[,2])), length.out=round(sqrt(nEval)))
+# x = as.matrix(expand.grid(xGrid, yGrid))
 
 
 # stima
-# est_field = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
-                                     # chunk_size=1000,
-                                     # sparse=FALSE, gc=TRUE)
-est_field = NWfield(X0, X1, x=x, kernel.type="epa",h=1.0,
-                    chunk_size=1000,
-                    sparse=FALSE, gc=TRUE)
+est_field = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
+                                     chunk_size=1000,
+                                     sparse=FALSE, gc=TRUE)
+# est_field = NWfield(X0, X1, x=x, kernel.type="epa",h=1.0,
+#                     chunk_size=1000,
+#                     sparse=FALSE, gc=TRUE)
 
 
 # plots ----

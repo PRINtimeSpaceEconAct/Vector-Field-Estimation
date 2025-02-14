@@ -67,7 +67,7 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         if (gc == TRUE){ gc() }
     }
     
-    return(listN(x, estimator, density))
+    return(listN(x, estimator, density,h,method.h,kernel.type,method.h))
 }
 
 
