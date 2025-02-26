@@ -74,6 +74,7 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 
 computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
     nObs = dim(distances$z1)[1]
+    nEval = dim(distances$z1)[2]
     d1 = distances$z1
     d2 = distances$z2
 
@@ -100,9 +101,55 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
             T1 = colSums(K_scaledY * d1)
             T2 = colSums(K_scaledY * d2)
             
-            numerator = determinant3(T0, S10, S20, T1, S11, S12, T2, S12, S22)
-            denominator = determinant3(S0, S10, S20, S10, S11, S12, S20, S12, S22)
-            return(numerator/denominator)
+            MNumerator = array(NA,dim=c(3,3,nEval))
+            MNumerator[1,1,] = T0
+            MNumerator[1,2,] = S10
+            MNumerator[1,3,] = S20
+            MNumerator[2,1,] = T1
+            MNumerator[2,2,] = S11
+            MNumerator[2,3,] = S12
+            MNumerator[3,1,] = T2
+            MNumerator[3,2,] = S12
+            MNumerator[3,3,] = S22
+            
+            MDenominator = MNumerator
+            MDenominator[1,1,] = S0
+            MDenominator[2,1,] = S10
+            MDenominator[3,1,] = S20
+            
+            bConstant = rbind(T0,T1,T2)
+
+            # solve_system <- function(i) {
+            #     if ( det(MDenominator[,,i]) == 0 ) {
+            #         return(rep(NaN,3))
+            #     }
+            #     return(solve(MDenominator[,,i], bConstant[,i],tol=1e-32))
+            # }
+            
+            # 1 == 1
+            
+            solve_system <- function(i) {
+                if ( det(MDenominator[,,i]) == 0 ) {
+                    return(rep(NaN,3))
+                }
+                return(as.numeric(ginv(MDenominator[,,i]) %*% bConstant[,i]))
+            }
+            
+            # take only the first component of each element of the list 
+            solutions <- matrix(unlist(purrr::map(1:nEval, ~ solve_system(.x))),nrow=3,byrow = FALSE)[1,]s            
+            return(solutions)
+            
+            # purrr::map_d(1:100, ~ solve_system(.x))
+
+            
+            # compute the determinant of MNumerator considering each matrix as a slice
+            # numerator =  apply(MNumerator, 3, det)
+            # denominator =  apply(MDenominator, 3, det)
+            
+            
+            # numerator = determinant3(T0, S10, S20, T1, S11, S12, T2, S12, S22)
+            # denominator = determinant3(S0, S10, S20, S10, S11, S12, S20, S12, S22)
+            # return(numerator/denominator)
         }
     )
 

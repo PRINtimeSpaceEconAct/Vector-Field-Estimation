@@ -118,20 +118,21 @@ est.2015 <- sm.regression(GDP.per.capita.sel[,(ncol(GDP.per.capita.sel)-4)],life
 dev.new()
 op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times" 
 
-plot(GDP.per.capita.sel[,1],life.exp.sel[,1],pch=19,cex=0.25,col="blue",ylim=c(30,85),xlim=c(6.,11.5),ylab="Life expectancy at birth",xlab="GDP per capita (PPP in million 2017 USD, log scale)")
+plot(GDP.per.capita.sel[,1],life.exp.sel[,1],pch=19,cex=0.25,col="blue",ylim=c(30,90),xlim=c(6.,12),ylab="Life expectancy at birth",xlab="GDP per capita (PPP in million 2017 USD, log scale)",xaxt = "n")
+axis(1,at=6:12,labels=round(exp(6:12),-3))
 points(GDP.per.capita.sel[,(ncol(GDP.per.capita.sel)-4)],life.exp.sel[,ncol(life.exp.sel)],pch=19,cex=0.25,col="red")
 
-lines(est.2015$eval.points,est.2015$estimate,col="red",lwd=2)
-lines(est.1960$eval.points,est.1960$estimate,col="blue",lwd=2)
-lines(est.1970$eval.points,est.1970$estimate,col="gray40",lwd=1.5)
+lines(est.2015$eval.points,est.2015$estimate,col="red",lwd=3)
+lines(est.1960$eval.points,est.1960$estimate,col="blue",lwd=3)
+lines(est.1970$eval.points,est.1970$estimate,col="gray40",lwd=1.)
 lines(est.1980$eval.points,est.1980$estimate,col="gray30",lwd=1.5)
-lines(est.1990$eval.points,est.1990$estimate,col="gray20",lwd=1.5)
-lines(est.2000$eval.points,est.2000$estimate,col="gray10",lwd=1.5)
-lines(est.2010$eval.points,est.2010$estimate,col="gray0",lwd=1.5)
+lines(est.1990$eval.points,est.1990$estimate,col="gray20",lwd=2)
+lines(est.2000$eval.points,est.2000$estimate,col="gray10",lwd=2.5)
+lines(est.2010$eval.points,est.2010$estimate,col="gray0",lwd=3)
 grid()
-legend("bottomright",c("1960","1970","1980","1990","2000","2010","2015"),col=c("blue","gray40","gray30","gray20","gray10","gray0","red"),lty=1,lwd=1.5)
+legend("bottomright",c("1960","1970","1980","1990","2000","2010","2015"),col=c("blue","gray40","gray30","gray20","gray10","gray0","red"),lty=1,lwd=c(3,1,1.5,2,2.5,3,3),bg="white")
 
-dev.copy2eps(file="prestonCurveDifferentYears.eps",width=7,height=7,family = "mono")
+dev.copy2pdf(file="prestonCurveDifferentYears.pdf",width=7,height=7,family = "mono")
 par(op)
 
 
