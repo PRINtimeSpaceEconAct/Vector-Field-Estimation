@@ -60,16 +60,16 @@ est_field_adaptive = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
 t = Sys.time() - t0
 
 # plot ----
-## plot campo vero ----
-# dev.new()
-# op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times" 
-# VFx = t(apply(x, 1, VF))
-# plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
-# arrows(x[,1],x[,2],x[,1]+VFx[,1],x[,2]+VFx[,2],angle=15,col="blue",length=0.05)
-# abline(h=0)
-# abline(v=0)
-# dev.copy2pdf(file="testPics/doubleWellcampoVero.pdf")
-# par(op)
+# plot campo vero ----
+dev.new()
+op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times"
+VFx = t(apply(x, 1, VF))
+plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
+arrows(x[,1],x[,2],x[,1]+VFx[,1],x[,2]+VFx[,2],angle=15,col="blue",length=0.05)
+abline(h=0)
+abline(v=0)
+dev.copy2pdf(file="testPics/doubleWellcampoVero.pdf")
+par(op)
 
 ## plot campo stimato ----
 dev.new()
@@ -86,26 +86,17 @@ abline(v=0)
 # dev.copy2pdf(file="testPics/doubleWellcampoStimato.pdf")
 par(op)
 
-dev.new()
-image.plot(x = sort(unique(x[,1])), y = sort(unique(x[,2])), z = matrix(sqrt(rowSums((est_field_adaptive$estimator)^2)), nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab=TeX(r'($X_1$)'),ylab=TeX(r'($X_2$)'),main="")
-
-# debug ----
-i = 596
-points(x[i,1],x[i,2],col="red")
-x = cbind(x,length=rowSums((est_field_adaptive$estimator)^2))
-xi = rbind(c(0.8367347, -0.5510204),c(0.8367347, -0.5510204))
-
 ## plot errore ----
-# VFx = t(apply(x, 1, VF))
-# plot(est_field_adaptive$x, type = "n", xlab = "X", ylab = "Y", main = "Error Vector Field")
-# arrows(est_field_adaptive$x[,1], est_field_adaptive$x[,2],
-#        est_field_adaptive$x[,1] + est_field_adaptive$estimator[,1] - VFx[,1],
-#        est_field_adaptive$x[,2] + est_field_adaptive$estimator[,2] - VFx[,2],
-#        length = 0.05, angle = 15, col = "red")
+VFx = t(apply(x, 1, VF))
+plot(est_field_adaptive$x, type = "n", xlab = "X", ylab = "Y", main = "Error Vector Field")
+arrows(est_field_adaptive$x[,1], est_field_adaptive$x[,2],
+       est_field_adaptive$x[,1] + est_field_adaptive$estimator[,1] - VFx[,1],
+       est_field_adaptive$x[,2] + est_field_adaptive$estimator[,2] - VFx[,2],
+       length = 0.05, angle = 15, col = "red")
 
 ## image errore assoluto ----
-# errorNorm = sqrt((est_field_adaptive$estimator[,1] - VFx[,1])^2 + (est_field_adaptive$estimator[,2] - VFx[,2])^2)
-# image.plot(x = unique(x[,1]), y = unique(x[,2]), z = matrix(log10(errorNorm), nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab="x",ylab="y",main="error norm (log10)")
+errorNorm = sqrt((est_field_adaptive$estimator[,1] - VFx[,1])^2 + (est_field_adaptive$estimator[,2] - VFx[,2])^2)
+image.plot(x = unique(x[,1]), y = unique(x[,2]), z = matrix(log10(errorNorm), nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab="x",ylab="y",main="error norm (log10)")
 
 ## image errore relativo ----
 VFx = t(apply(x, 1, VF))

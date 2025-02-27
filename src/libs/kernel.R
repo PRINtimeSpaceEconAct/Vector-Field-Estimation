@@ -8,6 +8,9 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     sqrtinvS = expm::sqrtm(solve(covX))
     detS = det(covX)
     
+    Z = X %*% sqrtinvS
+    z = x %*% sqrtinvS
+    
     if (is.null(x)) { x = defineEvalPoints(X,nEval) }
     nEval =  nrow(x)
     if (DEBUG) {
@@ -18,13 +21,11 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     
     if (is.null(type.est)) { stop("type.est not specified") }
     if (is.null(h) | is.null(method.h)) { 
-        list.h = define_h_method.h(X,h,method.h, kernel.type)
+        list.h = define_h_method.h(Z,h,method.h, kernel.type)
         h = list.h$h
         method.h = list.h$method.h }
     kernelFunction = defineKernel(kernel.type)
     
-    Z = X %*% sqrtinvS
-    z = x %*% sqrtinvS
     
     density = numeric(nEval)
     estimator = numeric(nEval)
@@ -38,8 +39,10 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         if (DEBUG) print(paste("Computing chunk ",i,"/",length(chunks),sep=""))
         
         chunk = chunks[[i]]
-        z_chunk = z[chunk, , drop=FALSE]
-        D_chunk = computeDcomponents(Z, z_chunk, sparse=sparse) 
+        z_chunk = z[chunk, ,drop=FALSE]
+        
+        if (is.null(D)){ D_chunk = computeDcomponents(Z, z_chunk, sparse=sparse) 
+        } else { D_chunk = list(z1=D$z1[,chunk], z2=D$z2[,chunk]) }
         
         # Kernel computation
         K = kernelFunction(sweep(D_chunk$z1, 1, h * lambda, "/"),sweep(D_chunk$z2, 1, h * lambda, "/"))
@@ -119,6 +122,19 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
             
             bConstant = rbind(T0,T1,T2)
 
+            solve_system <- function(i) {
+                # if ( cond(MDenominator[,,i]) > 1/.Machine$double.eps ) {
+                if ( det(MDenominator[,,i]) == 0 ) {
+                    return(rep(NaN,3))
+                }
+                return(as.numeric(ginv(MDenominator[,,i]) %*% bConstant[,i]))
+                # return(as.numeric(solve(MDenominator[,,i]) %*% bConstant[,i]))
+            }
+            
+            # take only the first component of each element of the list 
+            solutions <- matrix(unlist(purrr::map(1:nEval, ~ solve_system(.x))),nrow=3,byrow = FALSE)[1,]            
+            return(solutions)
+            
             # solve_system <- function(i) {
             #     if ( det(MDenominator[,,i]) == 0 ) {
             #         return(rep(NaN,3))
@@ -126,26 +142,11 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
             #     return(solve(MDenominator[,,i], bConstant[,i],tol=1e-32))
             # }
             
-            # 1 == 1
-            
-            solve_system <- function(i) {
-                if ( det(MDenominator[,,i]) == 0 ) {
-                    return(rep(NaN,3))
-                }
-                return(as.numeric(ginv(MDenominator[,,i]) %*% bConstant[,i]))
-            }
-            
-            # take only the first component of each element of the list 
-            solutions <- matrix(unlist(purrr::map(1:nEval, ~ solve_system(.x))),nrow=3,byrow = FALSE)[1,]s            
-            return(solutions)
-            
             # purrr::map_d(1:100, ~ solve_system(.x))
 
-            
             # compute the determinant of MNumerator considering each matrix as a slice
             # numerator =  apply(MNumerator, 3, det)
             # denominator =  apply(MDenominator, 3, det)
-            
             
             # numerator = determinant3(T0, S10, S20, T1, S11, S12, T2, S12, S22)
             # denominator = determinant3(S0, S10, S20, S10, S11, S12, S20, S12, S22)
