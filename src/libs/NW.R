@@ -71,8 +71,8 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                                 sparse=sparse, gc=gc, chunk_size=chunk_size)
             
             X1Hat = X0 + cbind(est1$estimator, est2$estimator)
-
-            trH[i] = (kernelFunction(0,0)/hi^2) * sum(1/est1$density)
+            
+            trH[i] = (kernelFunction(0,0)/(hi^2 * Nobs)) * sum(1/est1$density)
             freedom[i] = (1 + trH[i]/Nobs)/(1 - (trH[i]+2)/Nobs)
             RSS[i] = mean(rowSums((X1Hat - X1)^2,na.rm=TRUE))
             AICc[i] = RSS[i] + freedom[i]
@@ -84,12 +84,13 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         }
 
         h = hGrid[which.min(AICc)]
+        if (DEBUG) print(paste("Optimal h: ",h))
         if (DEBUG) print(paste("hGrid: ",paste(hGrid,collapse=" ")))
+         if (DEBUG) print(paste("trH: ",paste(trH,collapse=" ")))
         if (DEBUG) print(paste("freedom: ",paste(freedom,collapse=" ")))
-        if (DEBUG) print(paste("trH: ",paste(trH,collapse=" ")))
         if (DEBUG) print(paste("RSS: ",paste(RSS,collapse=" ")))
         if (DEBUG) print(paste("AICc: ",paste(AICc,collapse=" ")))
-        if (DEBUG) print(paste("Optimal h: ",h))
+        
     }
     
     est1 = NWregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D, 
