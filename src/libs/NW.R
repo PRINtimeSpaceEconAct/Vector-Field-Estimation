@@ -36,12 +36,19 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     Y2 = X1[,2] - X0[,2]
     
     if (hOpt == TRUE){
+        Nobs = nrow(X0)
+        # define grid of h
         list.h = define_h_method.h(X0, NULL ,"silverman", kernel.type)
         hStart = list.h$h/10
         hEnd = list.h$h*2
         hGrid = exp(log(hStart) + (log(hEnd) - log(hStart)) * (0:(nGridh-1))/(nGridh-1))
+        # define kernel function
+        kernelFunction = defineKernel(kernel.type)
         
+        AICc = array(NA,dim = nGridh)
         RSS = array(NA,dim = nGridh)
+        trH = array(NA,dim = nGridh)
+        freedom = array(NA,dim = nGridh)
         for (i in 1:nGridh){
             if (DEBUG) print(paste("Computing h ",i,"/",nGridh,sep=""))
             hi = hGrid[i]
@@ -64,7 +71,11 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                                 sparse=sparse, gc=gc, chunk_size=chunk_size)
             
             X1Hat = X0 + cbind(est1$estimator, est2$estimator)
-            RSS[i] = sum(rowSums((X1Hat - X1)^2,na.rm=TRUE))
+
+            trH[i] = (kernelFunction(0,0)/hi^2) * sum(1/est1$density)
+            freedom[i] = (1 + trH[i]/Nobs)/(1 - (trH[i]+2)/Nobs)
+            RSS[i] = mean(rowSums((X1Hat - X1)^2,na.rm=TRUE))
+            AICc[i] = RSS[i] + freedom[i]
             
             # maxLength = max(sqrt(rowSums(VFhi$estimator)^2),na.rm=T)
             # nPeriods = ceil(10*maxLength)
@@ -72,9 +83,12 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
             # RSS[i] = sum(rowSums((X1Hat[,,nPeriods] - X1)^2,na.rm=TRUE))
         }
 
-        h = hGrid[which.min(RSS)]
-        if (DEBUG) print(hGrid)
-        if (DEBUG) print(RSS)
+        h = hGrid[which.min(AICc)]
+        if (DEBUG) print(paste("hGrid: ",paste(hGrid,collapse=" ")))
+        if (DEBUG) print(paste("freedom: ",paste(freedom,collapse=" ")))
+        if (DEBUG) print(paste("trH: ",paste(trH,collapse=" ")))
+        if (DEBUG) print(paste("RSS: ",paste(RSS,collapse=" ")))
+        if (DEBUG) print(paste("AICc: ",paste(AICc,collapse=" ")))
         if (DEBUG) print(paste("Optimal h: ",h))
     }
     

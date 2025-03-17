@@ -1,5 +1,5 @@
 # Clear workspace and load dependencies
-setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
+#setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
 rm(list = ls())
 DEBUG = TRUE
 source("src/libs/loadLib.R")
@@ -8,7 +8,7 @@ library(latex2exp)
 
 
 # parameters ----
-nObs = 1000
+nObs = 5000
 nEval = 2500
 
 # data Generation ----
