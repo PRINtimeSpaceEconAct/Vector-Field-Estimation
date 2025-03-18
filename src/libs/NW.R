@@ -37,6 +37,9 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     
     if (hOpt == TRUE){
         Nobs = nrow(X0)
+        covX = cov(X0)
+        invS = solve(covX)
+        detS = det(covX)
         # define grid of h
         list.h = define_h_method.h(X0, NULL ,"silverman", kernel.type)
         hStart = list.h$h/10
@@ -72,10 +75,10 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
             
             X1Hat = X0 + cbind(est1$estimator, est2$estimator)
             
-            trH[i] = (kernelFunction(0,0)/(hi^2 * Nobs)) * sum(1/est1$density)
+            trH[i] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum(1/est1$density)
             freedom[i] = (1 + trH[i]/Nobs)/(1 - (trH[i]+2)/Nobs)
             RSS[i] = mean(rowSums((X1Hat - X1)^2,na.rm=TRUE))
-            AICc[i] = RSS[i] + freedom[i]
+            AICc[i] = log(RSS[i]) + freedom[i]
             
             # maxLength = max(sqrt(rowSums(VFhi$estimator)^2),na.rm=T)
             # nPeriods = ceil(10*maxLength)
@@ -86,7 +89,7 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         h = hGrid[which.min(AICc)]
         if (DEBUG) print(paste("Optimal h: ",h))
         if (DEBUG) print(paste("hGrid: ",paste(hGrid,collapse=" ")))
-         if (DEBUG) print(paste("trH: ",paste(trH,collapse=" ")))
+        if (DEBUG) print(paste("trH: ",paste(trH,collapse=" ")))
         if (DEBUG) print(paste("freedom: ",paste(freedom,collapse=" ")))
         if (DEBUG) print(paste("RSS: ",paste(RSS,collapse=" ")))
         if (DEBUG) print(paste("AICc: ",paste(AICc,collapse=" ")))
@@ -109,8 +112,11 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     kernel.type = est1$kernel.type
     lambda = est1$lambda
     type.est = "NW"
-    
-    return(listN(x, X0, X1, estimator, type.est, density, kernel.type, h, method.h, lambda))
+    if (hOpt == TRUE){
+        return(listN(x, X0, X1, estimator, type.est, density, kernel.type, h, method.h, lambda, AICc))
+    } else {
+        return(listN(x, X0, X1, estimator, type.est, density, kernel.type, h, method.h, lambda))
+    }
 }
 
 NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,

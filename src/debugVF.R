@@ -8,12 +8,19 @@ library(latex2exp)
 
 
 # parameters ----
-nObs = 5000
+nObs = 1000
 nEval = 2500
 
 # data Generation ----
 set.seed(1)
-X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 0.05*diag(2))
+X0 = mvrnorm(nObs, mu=c(0,0),Sigma = diag(2))
+# compute min and max distance between points
+# get distances component wise
+#distances = computeDcomponents(X0, X0)
+#distance_matrix = sqrt(mahalanobis(distances$z1, distances$z2, A = diag(2), 1))
+# print the non zero minimum and maximum distance
+#print(min(distance_matrix[distance_matrix > 0]))
+#print(max(distance_matrix[distance_matrix > 0]))
 
 # example 1 - double well ----
 # VF <- function(X){
@@ -51,14 +58,32 @@ VFx = t(apply(x, 1, VF))
 # est_field_LL = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
 #                         chunk_size=1000,
 #                         sparse=FALSE, gc=TRUE)
-est_field_NW = NWfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
+est_field_NW = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
                        chunk_size=1000,
                        sparse=FALSE, gc=TRUE, hOpt = TRUE)
+kernel.type = "gauss"
+list.h = define_h_method.h(X0, NULL ,"silverman", kernel.type)
+hStart = list.h$h/10
+hEnd = list.h$h*2
+nGridh = 10
+hGrid = exp(log(hStart) + (log(hEnd) - log(hStart)) * (0:(nGridh-1))/(nGridh-1))
 
-est_field_NW_SJ = NWfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
+est_dim = cbind(2500,2)
+
+# Initialize array with correct dimensions
+estimators = array(NA, dim = c(nGridh, est_dim[1], est_dim[2]))
+
+for (i in 1:nGridh){
+    est_field_NW = NWfield(X0, X1, x=x, kernel.type="gauss",
                        chunk_size=1000,
-                       sparse=FALSE, gc=TRUE, hOpt = FALSE)
-
+                       sparse=FALSE, gc=TRUE, hOpt = FALSE, h = hGrid[i])
+    estimators[i,,] = est_field_NW$estimator
+}
+# Compute the mean squared error between the estimated and true VF
+mse = array(NA, dim = nGridh)
+for (i in 1:nGridh){
+    mse[i] = sum(rowSums((estimators[i,,] - VFx)^2,na.rm=T)) / sum(is.finite(rowSums((estimators[i,,] - VFx))))
+}
 
 # plot ----
 ## plot campo vero ----
@@ -73,24 +98,24 @@ est_field_NW_SJ = NWfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
 # par(op)
 
 ## plot campo stimato ----
-est_field = est_field_NW_SJ
-lengthArrows=0.1
+# est_field = est_field_NW_SJ
+# lengthArrows=0.1
 
-# dev.new()
-plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
-arrows(est_field$x[,1], est_field$x[,2],
-       est_field$x[,1] + lengthArrows*est_field$estimator[,1], 
-       est_field$x[,2] + lengthArrows*est_field$estimator[,2],
-       length = 0.05, angle = 15, col = "blue")
-abline(h=0)
-abline(v=0)
-points(X0)
+# # dev.new()
+# plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
+# arrows(est_field$x[,1], est_field$x[,2],
+#        est_field$x[,1] + lengthArrows*est_field$estimator[,1], 
+#        est_field$x[,2] + lengthArrows*est_field$estimator[,2],
+#        length = 0.05, angle = 15, col = "blue")
+# abline(h=0)
+# abline(v=0)
+# points(X0)
 
 
-est_field_NW_SJ$estimator[is.na(est_field_NW_SJ$estimator)] = 0
-est_field_NW$estimator[is.na(est_field_NW$estimator)] = 0
+# est_field_NW_SJ$estimator[is.na(est_field_NW_SJ$estimator)] = 0
+# est_field_NW$estimator[is.na(est_field_NW$estimator)] = 0
 
-sum(rowSums((est_field_NW_SJ$estimator - VFx)^2,na.rm=T)) / sum(is.finite(rowSums((est_field_NW_SJ$estimator - VFx))))
-sum(rowSums((est_field_NW$estimator - VFx)^2,na.rm=T)) / sum(is.finite(rowSums((est_field_NW$estimator - VFx))))
+#sum(rowSums((est_field_NW_SJ$estimator - VFx)^2,na.rm=T)) / sum(is.finite(rowSums((est_field_NW_SJ$estimator - VFx))))
+#sum(rowSums((est_field_NW$estimator - VFx)^2,na.rm=T)) / sum(is.finite(rowSums((est_field_NW$estimator - VFx))))
 
    
