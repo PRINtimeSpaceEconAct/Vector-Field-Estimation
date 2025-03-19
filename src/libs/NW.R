@@ -77,7 +77,7 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
             
             trH[i] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum(1/est1$density)
             freedom[i] = (1 + trH[i]/Nobs)/(1 - (trH[i]+2)/Nobs)
-            RSS[i] = mean(rowSums((X1Hat - X1)^2,na.rm=TRUE))
+            RSS[i] = det(cov(X1Hat - X1))
             AICc[i] = log(RSS[i]) + freedom[i]
             
             # maxLength = max(sqrt(rowSums(VFhi$estimator)^2),na.rm=T)
