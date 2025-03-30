@@ -58,9 +58,13 @@ VFx = t(apply(x, 1, VF))
 # est_field_LL = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
 #                         chunk_size=1000,
 #                         sparse=FALSE, gc=TRUE)
-est_field_NW_opt = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
+# est_field_NW_opt = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
+#                        chunk_size=1000,
+#                        sparse=FALSE, gc=TRUE, hOpt = TRUE)
+
+est_field_NW_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
                        chunk_size=1000,
-                       sparse=FALSE, gc=TRUE, hOpt = TRUE)
+                       sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha=NULL, alphaOpt = TRUE)
 kernel.type = "gauss"
 list.h = define_h_method.h(X0, NULL ,"silverman", kernel.type)
 hStart = list.h$h/10
