@@ -126,7 +126,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
     
     # Hardcoded alpha range
     alpha_start = 0
-    alpha_end = 1
+    alpha_end = 0.9
     
     # Parameter validation
     if (hOpt == TRUE && !is.null(h)) {
@@ -301,7 +301,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                 }
                 
                 # Print RSS matrix
-                cat("\nRSS values for all h and alpha combinations:\n")
+                cat("\n log(RSS) values for all h and alpha combinations:\n")
                 cat("      ") # Space for row labels
                 for (j in 1:nGridAlpha) {
                     cat(sprintf("alpha=%.2f ", alphaGrid[j]))
@@ -311,7 +311,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                 for (i in 1:nGridh) {
                     cat(sprintf("h=%.2f ", hGrid[i]))
                     for (j in 1:nGridAlpha) {
-                        cat(sprintf("%.2f     ", RSS_all[i,j]))
+                        cat(sprintf("%.2f     ", log(RSS_all[i,j])))
                     }
                     cat("\n")
                 }
