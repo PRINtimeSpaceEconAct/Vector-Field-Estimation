@@ -51,6 +51,7 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         AICc = array(NA,dim = nGridh)
         RSS = array(NA,dim = nGridh)
         trH = array(NA,dim = nGridh)
+        if (DEBUG) trH_old = array(NA,dim = nGridh)
         freedom = array(NA,dim = nGridh)
         for (i in 1:nGridh){
             if (DEBUG) print(paste("Computing h ", i, "/", nGridh, sep=""))
@@ -75,7 +76,8 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
             
             X1Hat = X0 + cbind(est1$estimator, est2$estimator)
             
-            trH[i] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum(1/est1$density)
+            if (DEBUG) trH_old[i] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum(1/est1$density)
+            trH[i] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
             freedom[i] = (1 + (2*trH[i])/(2*Nobs))/(1 - (2*trH[i]+2)/(2*Nobs))
             RSS[i] = det(cov(X1Hat - X1))
             AICc[i] = log(RSS[i]) + freedom[i]
@@ -90,6 +92,7 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         if (DEBUG) print(paste("Optimal h: ", format(h, digits=2, nsmall=2)))
         if (DEBUG) print(paste("hGrid: ", paste(format(hGrid, digits=2, nsmall=2), collapse=" ")))
         if (DEBUG) print(paste("trH: ", paste(format(trH, digits=2, nsmall=2), collapse=" ")))
+        if (DEBUG) print(paste("trH_old: ", paste(format(trH_old, digits=2, nsmall=2), collapse=" ")))
         if (DEBUG) print(paste("freedom: ", paste(format(freedom, digits=2, nsmall=2), collapse=" ")))
         if (DEBUG) print(paste("RSS: ", paste(format(RSS, digits=2, nsmall=2), collapse=" ")))
         if (DEBUG) print(paste("AICc: ", paste(format(AICc, digits=2, nsmall=2), collapse=" ")))
@@ -206,8 +209,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                                         sparse=sparse, gc=gc, chunk_size=chunk_size)
                     
                     X1Hat = X0 + cbind(est1$estimator, est2$estimator)
-                    
-                    trH_all[i,j] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum(1/est1$density)
+                    trH_all[i,j] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
                     freedom_all[i,j] = (1 + (2*trH_all[i,j])/(2*Nobs))/(1 - (2*trH_all[i,j]+2)/(2*Nobs))
                     RSS_all[i,j] = det(cov(X1Hat - X1))
                     AICc_all[i,j] = log(RSS_all[i,j]) + freedom_all[i,j]
@@ -237,7 +239,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                 
                 X1Hat = X0 + cbind(est1$estimator, est2$estimator)
                 
-                trH_all[i] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum(1/est1$density)
+                trH_all[i] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
                 freedom_all[i] = (1 + (2*trH_all[i])/(2*Nobs))/(1 - (2*trH_all[i]+2)/(2*Nobs))
                 RSS_all[i] = det(cov(X1Hat - X1))
                 AICc_all[i] = log(RSS_all[i]) + freedom_all[i]
