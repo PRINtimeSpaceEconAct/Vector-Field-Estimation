@@ -1,5 +1,5 @@
 # Clear workspace and load dependencies
-#setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
+setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
 rm(list = ls())
 DEBUG = TRUE
 source("src/libs/loadLib.R")
@@ -58,13 +58,18 @@ VFx = t(apply(x, 1, VF))
 # est_field_LL = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
 #                         chunk_size=1000,
 #                         sparse=FALSE, gc=TRUE)
-est_field_NW_opt = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
-                       chunk_size=1000,
-                       sparse=FALSE, gc=TRUE, hOpt = TRUE)
+#est_field_NW_opt = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
+#                       chunk_size=1000,
+#                       sparse=FALSE, gc=TRUE, hOpt = TRUE)
 
 est_field_NW_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
                        chunk_size=1000,
-                       sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha=NULL, alphaOpt = TRUE)
+                       sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha=NULL, alphaOpt = TRUE, nGridAlpha=10)
+
+contour(x=est_field_NW_adaptive$hGrid,  y=est_field_NW_adaptive$alphaGrid, z=est_field_NW_adaptive$AICc)
+#indMin = which(est_field_NW_adaptive$AICc==min(est_field_NW_adaptive$AICc),arr.ind = TRUE)
+points(est_field_NW_adaptive$h,est_field_NW_adaptive$alpha, pch=19)
+
 kernel.type = "gauss"
 list.h = define_h_method.h(X0, NULL ,"silverman", kernel.type)
 hStart = list.h$h/10

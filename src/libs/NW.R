@@ -209,7 +209,9 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                                         sparse=sparse, gc=gc, chunk_size=chunk_size)
                     
                     X1Hat = X0 + cbind(est1$estimator, est2$estimator)
-                    trH_all[i,j] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
+                    
+                    trH_all[i,j] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum((1/lambda_ij^2)*1/est1$density)
+                    #trH_all[i,j] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
                     freedom_all[i,j] = (1 + (2*trH_all[i,j])/(2*Nobs))/(1 - (2*trH_all[i,j]+2)/(2*Nobs))
                     RSS_all[i,j] = det(cov(X1Hat - X1))
                     AICc_all[i,j] = log(RSS_all[i,j]) + freedom_all[i,j]
@@ -239,7 +241,8 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                 
                 X1Hat = X0 + cbind(est1$estimator, est2$estimator)
                 
-                trH_all[i] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
+                trH_all[i] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum((1/lambda_ij^2)*1/est1$density)
+                #trH_all[i] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
                 freedom_all[i] = (1 + (2*trH_all[i])/(2*Nobs))/(1 - (2*trH_all[i]+2)/(2*Nobs))
                 RSS_all[i] = det(cov(X1Hat - X1))
                 AICc_all[i] = log(RSS_all[i]) + freedom_all[i]
@@ -383,6 +386,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
     # Add optimization results
     if (hOpt == TRUE || alphaOpt == TRUE){
         result$AICc = AICc
+        result$hGrid = hGrid
         
         # Add alpha-related information only if alphaOpt is TRUE
         if (alphaOpt == TRUE) {
