@@ -54,6 +54,13 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         optVars$debugArrays = debugInitArrays(optParams$nGridh_actual) # Use actual grid size
         optVars$AICc_values = array(NA, dim = optParams$nGridh_actual)
 
+        # Create progress bar if not in debug mode
+        show_progress = !exists("DEBUG") || !DEBUG
+        if (show_progress) {
+            cat("Optimizing bandwidth parameter h...\n")
+            pb = utils::txtProgressBar(min = 0, max = optParams$nGridh_actual, style = 3)
+        }
+
         # --- Optimization Loop ---
         for (i in 1:optParams$nGridh_actual) {
             debugPrint("Computing h %d/%d", i, optParams$nGridh_actual)
@@ -82,8 +89,19 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                 optVars$best_AICc = metrics_i$AICc
                 optVars$best_h = hi
             }
+            
+            # Update progress bar if shown
+            if (show_progress) {
+                utils::setTxtProgressBar(pb, i)
+            }
         }
         # --- End Optimization Loop ---
+        
+        # Close progress bar if shown
+        if (show_progress) {
+            close(pb)
+            cat("\n")
+        }
 
         h = optVars$best_h # Update h with the best found value
         printOptimizationResults(hGrid = optVars$hGrid,
@@ -101,9 +119,8 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                                                    kernel.type=kernel.type, D=D,
                                                    method.h=method.h, h=h, lambda=NULL,
                                                    sparse=sparse, gc=gc, chunk_size=final_chunk_size)
-
     # Construct result object
-    result = listN(x = final_est_components$x,
+    result = list(x = final_est_components$x_eval,
                    X0 = X0, X1 = X1,
                    estimator = final_est_components$estimator,
                    type.est = "NW",
@@ -163,6 +180,22 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
             optVars$AICc_values = array(NA, dim = optParams$nGridh_actual)
         }
 
+        # Setup progress bar if not in debug mode
+        show_progress = !exists("DEBUG") || !DEBUG
+        total_iterations = optParams$nGridh_actual
+        if (alphaOpt) total_iterations = total_iterations * optParams$nGridAlpha_actual
+        
+        if (show_progress) {
+            if (hOpt && alphaOpt) {
+                cat("Optimizing bandwidth parameter h and alpha...\n")
+            } else if (hOpt) {
+                cat("Optimizing bandwidth parameter h...\n")
+            } else {
+                cat("Optimizing alpha parameter...\n")
+            }
+            pb = utils::txtProgressBar(min = 0, max = total_iterations, style = 3)
+            progress_counter = 0
+        }
 
         # --- Optimization Loop ---
         for (i in 1:optParams$nGridh_actual) {
@@ -174,41 +207,22 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
             pilotDensity = densityEst2d(X0, x=X0, nEval=optParams$Nobs, kernel.type=kernel.type,
                                        D=D, method.h=NULL, h=hi, sparse=sparse,
                                        gc=gc, chunk_size=chunk_size)
-            # Check for zero or negative density values before log
-            valid_density_indices <- pilotDensity$estimator > 1e-10
-            if(sum(!valid_density_indices) > 0) {
-                warning(sprintf("Found %d zero or negative pilot density values at h=%.4f. Excluding them from geometric mean.", sum(!valid_density_indices), hi))
-            }
-            if(all(!valid_density_indices)) {
-                 warning(sprintf("All pilot density values are zero or negative at h=%.4f. Cannot calculate lambda. Skipping this h.", hi))
-                 # Handle skipping in the loop? Or assign Inf AICc later?
-                 # For now, let g be NA or Inf which should cause issues downsteam handled by AICc NA/Inf check
-                 g = Inf
-            } else {
-                 g = exp(mean(log(pilotDensity$estimator[valid_density_indices])))
-            }
 
+            # Calculate geometric mean directly without any checks
+            g = exp(mean(log(pilotDensity$estimator)))
 
             for (j in 1:optParams$nGridAlpha_actual) {
                 alpha_j = optParams$alphaGrid[j] # Use alpha from the grid (single value if alphaOpt=F)
                 if (alphaOpt) debugPrint("  Computing alpha %d/%d (alpha=%.4f)", j, optParams$nGridAlpha_actual, alpha_j)
 
-                # Handle case where g is Inf
-                if(is.infinite(g)) {
-                     lambda_ij = rep(Inf, length(pilotDensity$estimator)) # Assign Inf lambda
-                } else {
-                    lambda_ij = (pilotDensity$estimator / g)^(-alpha_j)
-                    # Handle potential Inf/NaN in lambda_ij if pilotDensity was zero
-                    lambda_ij[!valid_density_indices] = Inf # Assign Inf where density was bad
-                    lambda_ij[is.nan(lambda_ij)] = Inf # Replace potential NaN with Inf
-                }
-
+                # Calculate lambda directly
+                lambda_ij = (pilotDensity$estimator / g)^(-alpha_j)
 
                 # Pass method.h=NULL here, h=hi is explicit
                 est_components_ij = computeNWFieldComponents(X0, Y1, Y2, x=X0, nEval=optParams$Nobs,
                                                              kernel.type=kernel.type, D=D,
                                                              method.h=NULL, h=hi, lambda=lambda_ij,
-                                        sparse=sparse, gc=gc, chunk_size=chunk_size)
+                                                             sparse=sparse, gc=gc, chunk_size=chunk_size)
                     
                 X1Hat_ij = X0 + est_components_ij$estimator
 
@@ -238,15 +252,26 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                     optVars$best_alpha = alpha_j
                     optVars$best_lambda = lambda_ij # Store the lambda corresponding to best h/alpha
                 }
+                
+                # Update progress bar if shown
+                if (show_progress) {
+                    progress_counter = progress_counter + 1
+                    utils::setTxtProgressBar(pb, progress_counter)
+                }
             } # End alpha loop
         } # End h loop
         # --- End Optimization Loop ---
+        
+        # Close progress bar if shown
+        if (show_progress) {
+            close(pb)
+            cat("\n")
+        }
 
         # Set the final parameters based on optimization results
         current_h = optVars$best_h
         current_alpha = optVars$best_alpha
         final_lambda = optVars$best_lambda # Use the lambda found for the best parameters
-        current_method_h = if (hOpt) "optimized" else current_method_h # Update method if h was optimized
 
         # Check if optimization failed to find a best h
         if (is.null(current_h)) {
@@ -283,9 +308,8 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                                                    kernel.type=kernel.type, D=D,
                                                    method.h=NULL, h=current_h, lambda=final_lambda,
                                                    sparse=sparse, gc=gc, chunk_size=final_chunk_size)
-
     # Construct result object
-    result = listN(x = final_est_components$x,
+    result = list(x = final_est_components$x_eval,
                    X0 = X0, X1 = X1,
                    estimator = final_est_components$estimator,
                    type.est = "NW_adaptive",
@@ -321,17 +345,13 @@ computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, metho
                       sparse=sparse, gc=gc, chunk_size=chunk_size)
     
     estimator = cbind(est1$estimator, est2$estimator)
-
+    density = est1$density
+    h = est1$h
+    method.h = est1$method.h
+    kernel.type = est1$kernel.type
+    lambda = est1$lambda
     # Return relevant components needed later
-    list(
-        estimator = estimator,
-        x = x_eval,
-        density = est1$density, # Assuming density is the same for both est1 and est2 at x_eval
-        h = est1$h,
-        method.h = est1$method.h,
-        kernel.type = est1$kernel.type,
-        lambda = lambda # Pass lambda through
-    )
+    return(listN(estimator, x_eval, density, h, method.h, kernel.type, lambda))
 }
 
 # Helper function to calculate AICc and related metrics
@@ -364,11 +384,91 @@ calculateAICcNW <- function(X0, X1, X1Hat, h, lambda, density, Nobs, detS, kerne
     }
 
 
-    list(
-        AICc = AICc,
-        RSS = RSS,
-        trH = trH,
-        freedom = freedom
+    return(listN(AICc, RSS, trH, freedom))
+}
+
+bootstrapNWfieldErrors <- function(result, B = 500, chunk_size = nrow(result$x)) {
+    # Extract necessary info from the original result object
+    X0 = result$X0
+    X1 = result$X1
+    x_eval = result$x
+    h_opt = result$h
+    kernel.type = result$kernel.type
+    method.h = result$method.h
+
+    # Infer the estimation type from the value of lambda in the result object
+    if (!is.null(result$lambda)) {
+        type.est = "Adaptive"
+    } else {
+        type.est = "Non_Adaptive"
+    }
+    
+    # Parameters specific to adaptive case
+    alpha_opt = if (!is.null(result$alpha)) result$alpha else NULL
+    
+    # Compute observation differences
+    Nobs = nrow(X0)
+    Y = X1 - X0
+    Y1 = Y[, 1]
+    Y2 = Y[, 2]
+    nEvalPoints = nrow(x_eval)
+    
+    # Initialize array to store bootstrap estimates directly
+    # dimensions: [EvaluationPoint, Component (1 or 2), BootstrapReplicate]
+    estimators_array = array(
+        NA, 
+        dim = c(nEvalPoints, 2, B)
     )
+    
+    # Setup progress bar if not in debug mode
+    show_progress = !exists("DEBUG") || !DEBUG
+    if (show_progress) {
+        cat("Running bootstrap with", B, "replicates...\n")
+        pb = utils::txtProgressBar(min = 0, max = B, style = 3)
+    } else {
+        # Original progress reporting for debug mode
+        cat("Starting bootstrap with", B, "replicates...\n")
+    }
+    
+    for (b in 1:B) {
+        # Resample indices with replacement
+        idx_star = sample(1:Nobs, Nobs, replace = TRUE)
+        X0_star = X0[idx_star, ]
+        Y1_star = Y1[idx_star]
+        Y2_star = Y2[idx_star]
+        
+        # Handle adaptive vs non-adaptive cases
+        current_lambda = NULL
+        
+        if (type.est == "Adaptive") {
+            # Calculate adaptive bandwidth
+            current_lambda = getLocalBandwidth(X0_star, kernel.type=kernel.type, D=NULL, method.h=method.h,
+                                    h=NULL, sparse=FALSE, gc=FALSE, chunk_size=chunk_size, alpha = alpha_opt)
+        }
+        
+        # Re-estimate field components using fixed h_opt and appropriate lambda
+        est_star = computeNWFieldComponents(X0 = X0_star, Y1 = Y1_star, Y2 = Y2_star, x = x_eval, 
+            nEval = nEvalPoints, kernel.type = kernel.type, D = NULL, method.h = NULL, # h is fixed
+            h = h_opt, lambda = current_lambda, sparse = FALSE, gc = FALSE, chunk_size = chunk_size)
+        
+        # Store directly into the array
+        estimators_array[, , b] = est_star$estimator
+        
+        # Update progress bar if shown
+        if (show_progress) {
+            utils::setTxtProgressBar(pb, b)
+        }
+    }
+    
+    # Close progress bar if shown and print completion message
+    if (show_progress) {
+        close(pb)
+        cat("\nBootstrap completed.\n")
+    } else {
+        cat("Bootstrap completed.\n")
+    }
+    
+    # Return the array of bootstrap estimates
+    return(listN(estimators_array))
 }
 

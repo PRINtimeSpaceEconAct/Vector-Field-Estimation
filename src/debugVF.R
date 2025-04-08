@@ -1,7 +1,7 @@
 # Clear workspace and load dependencies
 #setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
 rm(list = ls())
-DEBUG = TRUE
+DEBUG = FALSE
 source("src/libs/loadLib.R")
 library(fields)
 library(latex2exp)
@@ -58,69 +58,71 @@ VFx = t(apply(x, 1, VF))
 # est_field_LL = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
 #                         chunk_size=1000,
 #                         sparse=FALSE, gc=TRUE)
-est_field_NW_opt = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
-                       chunk_size=1000,
-                       sparse=FALSE, gc=TRUE, hOpt = TRUE)
+#est_field_NW_opt = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
+#                       chunk_size=1000,
+#                       sparse=FALSE, gc=TRUE, hOpt = TRUE)
 
 est_field_NW_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
                        chunk_size=1000,
-                       sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha=NULL, alphaOpt = TRUE, nGridAlpha=10)
+                       sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha=NULL, alphaOpt = TRUE, nGridAlpha=2)
 
-contour(x=est_field_NW_adaptive$hGrid,  y=est_field_NW_adaptive$alphaGrid, z=est_field_NW_adaptive$AICc)
+bootstrap_est_field_NW = bootstrapNWfieldErrors(est_field_NW_adaptive, B = 10, chunk_size = 1000)
+
+#contour(x=est_field_NW_adaptive$hGrid,  y=est_field_NW_adaptive$alphaGrid, z=est_field_NW_adaptive$AICc)
 #indMin = which(est_field_NW_adaptive$AICc==min(est_field_NW_adaptive$AICc),arr.ind = TRUE)
-points(est_field_NW_adaptive$h,est_field_NW_adaptive$alpha, pch=19)
+#points(est_field_NW_adaptive$h,est_field_NW_adaptive$alpha, pch=19)
 
-kernel.type = "gauss"
-list.h = define_h_method.h(X0, NULL ,"silverman", kernel.type)
-hStart = list.h$h/10
-hEnd = list.h$h*2
-nGridh = 10
-hGrid = exp(log(hStart) + (log(hEnd) - log(hStart)) * (0:(nGridh-1))/(nGridh-1))
+# kernel.type = "gauss"
+# list.h = define_h_method.h(X0, NULL ,"silverman", kernel.type)
+# hStart = list.h$h/10
+# hEnd = list.h$h*2
+# nGridh = 10
+# hGrid = exp(log(hStart) + (log(hEnd) - log(hStart)) * (0:(nGridh-1))/(nGridh-1))
 
-est_dim = cbind(2500,2)
+# est_dim = cbind(2500,2)
 
-# Initialize array with correct dimensions
-estimators = array(NA, dim = c(nGridh, est_dim[1], est_dim[2]))
+# # Initialize array with correct dimensions
+# estimators = array(NA, dim = c(nGridh, est_dim[1], est_dim[2]))
 
-for (i in 1:nGridh){
-    est_field_NW = NWfield(X0, X1, x=x, kernel.type="gauss",
-                       chunk_size=1000,
-                       sparse=FALSE, gc=TRUE, hOpt = FALSE, h = hGrid[i])
-    estimators[i,,] = est_field_NW$estimator
-}
-# Compute the mean squared error between the estimated and true VF
-mse = array(NA, dim = nGridh)
-error_cricci = array(NA, dim = nGridh)
-for (i in 1:nGridh){
-    mse[i] = sum(rowSums((estimators[i,,] - VFx)^2,na.rm=T)) / sum(is.finite(rowSums((estimators[i,,] - VFx))))
-    # Substitute the NAs with 0
-    estimators[i,,][is.na(estimators[i,,])] = 0
-    error_cricci[i] = sum(rowSums((estimators[i,,] - VFx)^2)/rowSums(VFx^2)) 
-}
-print(paste("MSE: ",paste(mse,collapse=" ")))
-print(paste("error_cricci: ",paste(error_cricci,collapse=" ")))
-# Print all the optimal bandwidths
-print(paste("Optimal h for AICc", hGrid[which.min(est_field_NW_opt$AICc)], "at index", which.min(est_field_NW_opt$AICc)))
-print(paste("Optimal h for mse", hGrid[which.min(mse)], "at index", which.min(mse)))
-print(paste("Optimal h for error_cricci", hGrid[which.min(error_cricci)], "at index", which.min(error_cricci)))
-# Normalize the errors
-mse = mse / max(mse)
-error_cricci = error_cricci / max(error_cricci)
-# Handle AICc normalization considering it could have both positive and negative values
-AICc_values = est_field_NW_opt$AICc
-if(min(AICc_values) < 0) {
-  # If there are negative values, shift to make all values positive before normalizing
-  AICc_shifted = AICc_values - min(AICc_values) + 1e-10  # Add small constant to avoid zeros
-  AICc = AICc_shifted / max(AICc_shifted)
-} else {
-  # If all values are positive, normalize directly
-  AICc = AICc_values / max(AICc_values)
-}
-# Plot the errors
-plot(hGrid, mse, type = "l", col = "red", lwd = 2, xlab = "Bandwidth", ylab = "Normalized Error", main = "Normalized Errors",ylim=range(c(mse,error_cricci,AICc)))
-lines(hGrid, error_cricci, col = "blue", lwd = 2)
-lines(hGrid, AICc, col = "green", lwd = 2)
-legend("topright", legend = c("MSE", "Error Cricci", "AICc"), col = c("red", "blue", "green"), lwd = 2)
+# for (i in 1:nGridh){
+#     est_field_NW = NWfield(X0, X1, x=x, kernel.type="gauss",
+#                        chunk_size=1000,
+#                        sparse=FALSE, gc=TRUE, hOpt = FALSE, h = hGrid[i])
+#     estimators[i,,] = est_field_NW$estimator
+# }
+# # Compute the mean squared error between the estimated and true VF
+# mse = array(NA, dim = nGridh)
+# error_cricci = array(NA, dim = nGridh)
+# for (i in 1:nGridh){
+#     mse[i] = sum(rowSums((estimators[i,,] - VFx)^2,na.rm=T)) / sum(is.finite(rowSums((estimators[i,,] - VFx))))
+#     # Substitute the NAs with 0
+#     estimators[i,,][is.na(estimators[i,,])] = 0
+#     error_cricci[i] = sum(rowSums((estimators[i,,] - VFx)^2)/rowSums(VFx^2)) 
+# }
+# print(paste("MSE: ",paste(mse,collapse=" ")))
+# print(paste("error_cricci: ",paste(error_cricci,collapse=" ")))
+# # Print all the optimal bandwidths
+# print(paste("Optimal h for AICc", hGrid[which.min(est_field_NW_opt$AICc)], "at index", which.min(est_field_NW_opt$AICc)))
+# print(paste("Optimal h for mse", hGrid[which.min(mse)], "at index", which.min(mse)))
+# print(paste("Optimal h for error_cricci", hGrid[which.min(error_cricci)], "at index", which.min(error_cricci)))
+# # Normalize the errors
+# mse = mse / max(mse)
+# error_cricci = error_cricci / max(error_cricci)
+# # Handle AICc normalization considering it could have both positive and negative values
+# AICc_values = est_field_NW_opt$AICc
+# if(min(AICc_values) < 0) {
+#   # If there are negative values, shift to make all values positive before normalizing
+#   AICc_shifted = AICc_values - min(AICc_values) + 1e-10  # Add small constant to avoid zeros
+#   AICc = AICc_shifted / max(AICc_shifted)
+# } else {
+#   # If all values are positive, normalize directly
+#   AICc = AICc_values / max(AICc_values)
+# }
+# # Plot the errors
+# plot(hGrid, mse, type = "l", col = "red", lwd = 2, xlab = "Bandwidth", ylab = "Normalized Error", main = "Normalized Errors",ylim=range(c(mse,error_cricci,AICc)))
+# lines(hGrid, error_cricci, col = "blue", lwd = 2)
+# lines(hGrid, AICc, col = "green", lwd = 2)
+# legend("topright", legend = c("MSE", "Error Cricci", "AICc"), col = c("red", "blue", "green"), lwd = 2)
 
 # plot ----
 ## plot campo vero ----
