@@ -58,18 +58,18 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         show_progress = !exists("DEBUG") || !DEBUG
         if (show_progress) {
             cat("Optimizing bandwidth parameter h...\n")
-            pb = utils::txtProgressBar(min = 0, max = optParams$nGridh_actual, style = 3)
-        }
-
-        # --- Optimization Loop ---
+            pb = utils::txtProgressBar(min = 0, max = optParams$nGridh_actual, style = 3) }
+        
+        # --- Optimization Loop h ---
         for (i in 1:optParams$nGridh_actual) {
             debugPrint("Computing h %d/%d", i, optParams$nGridh_actual)
             hi = optParams$hGrid[i]
 
+            # Use full chunk_size? Check logic
             est_components_i = computeNWFieldComponents(X0, Y1, Y2, x=X0, nEval=optParams$Nobs,
                                                         kernel.type=kernel.type, D=D,
                                                         method.h=method.h, h=hi, lambda=NULL,
-                                                        sparse=sparse, gc=gc, chunk_size=chunk_size) # Use full chunk_size? Check logic
+                                                        sparse=sparse, gc=gc, chunk_size=chunk_size) 
 
             X1Hat_i = X0 + est_components_i$estimator
 
@@ -91,17 +91,12 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
             }
             
             # Update progress bar if shown
-            if (show_progress) {
-                utils::setTxtProgressBar(pb, i)
-            }
+            if (show_progress) { utils::setTxtProgressBar(pb, i) }
         }
-        # --- End Optimization Loop ---
+        # --- End Optimization Loop h ---
         
         # Close progress bar if shown
-        if (show_progress) {
-            close(pb)
-            cat("\n")
-        }
+        if (show_progress) { close(pb) }
 
         h = optVars$best_h # Update h with the best found value
         printOptimizationResults(hGrid = optVars$hGrid,
@@ -109,12 +104,11 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                                  arrays = optVars$debugArrays,
                                  alpha = NULL,
                                  alphaGrid = NULL)
-    }
+    } # end if hOpt 
 
     # Final estimation using the chosen h (either provided, method-derived, or optimized)
     final_x = if (is.null(x)) X0 else x
     final_chunk_size = if (is.null(x)) nrow(X0) else chunk_size
-
     final_est_components = computeNWFieldComponents(X0, Y1, Y2, x=final_x, nEval=nEval,
                                                    kernel.type=kernel.type, D=D,
                                                    method.h=method.h, h=h, lambda=NULL,
@@ -186,13 +180,9 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
         if (alphaOpt) total_iterations = total_iterations * optParams$nGridAlpha_actual
         
         if (show_progress) {
-            if (hOpt && alphaOpt) {
-                cat("Optimizing bandwidth parameter h and alpha...\n")
-            } else if (hOpt) {
-                cat("Optimizing bandwidth parameter h...\n")
-            } else {
-                cat("Optimizing alpha parameter...\n")
-            }
+            if (hOpt && alphaOpt) { print("Optimizing bandwidth parameter h and alpha...")
+            } else if (hOpt) { print("Optimizing bandwidth parameter h...")
+            } else { print("Optimizing alpha parameter...") }
             pb = utils::txtProgressBar(min = 0, max = total_iterations, style = 3)
             progress_counter = 0
         }
@@ -225,10 +215,10 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                                                              sparse=sparse, gc=gc, chunk_size=chunk_size)
                     
                 X1Hat_ij = X0 + est_components_ij$estimator
-
                 metrics_ij = calculateAICcNW(X0=X0, X1=X1, X1Hat=X1Hat_ij, h=hi, lambda=lambda_ij,
-                                                 density=est_components_ij$density, Nobs=optParams$Nobs,
-                                                 detS=optParams$detS, kernelFunction=optParams$kernelFunction)
+                                                density=est_components_ij$density, Nobs=optParams$Nobs,
+                                                detS=optParams$detS, 
+                                                kernelFunction=optParams$kernelFunction)
 
                 # Store results and update best
                 aic_index_1 = i
@@ -263,10 +253,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
         # --- End Optimization Loop ---
         
         # Close progress bar if shown
-        if (show_progress) {
-            close(pb)
-            cat("\n")
-        }
+        if (show_progress) { close(pb) }
 
         # Set the final parameters based on optimization results
         current_h = optVars$best_h
@@ -274,9 +261,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
         final_lambda = optVars$best_lambda # Use the lambda found for the best parameters
 
         # Check if optimization failed to find a best h
-        if (is.null(current_h)) {
-             stop("Optimization failed to find a best value for h.")
-        }
+        if (is.null(current_h)) { stop("Optimization failed to find a best value for h.") }
 
         
         # Print optimization results
@@ -291,7 +276,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
         # current_h and current_alpha were set after calling setupOptimizationParameters
         # Pass method.h=NULL as h is explicitly known
         final_lambda = getLocalBandwidth(X0, kernel.type=kernel.type, D=D, method.h=NULL, h=current_h,
-                                         sparse=sparse, gc=gc, chunk_size=chunk_size, alpha = current_alpha)
+                            sparse=sparse, gc=gc, chunk_size=chunk_size, alpha = current_alpha)
     }
 
     # Final estimation using the chosen/optimized parameters
@@ -334,10 +319,13 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
 }
 
 # Helper function for core NW field component estimation
-computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, method.h, h, lambda, sparse, gc, chunk_size) {
+computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, 
+                             method.h, h, lambda, sparse, gc, chunk_size) {
+    
     est1 = NWregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D,
                       method.h=method.h, h=h, lambda=lambda,
                       sparse=sparse, gc=gc, chunk_size=chunk_size)
+    
     # Use the evaluation points from the first estimate for the second
     x_eval = est1$x
     est2 = NWregression(X0, Y2, x=x_eval, nEval=nEval, kernel.type=kernel.type, D=D,
@@ -351,11 +339,13 @@ computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, metho
     kernel.type = est1$kernel.type
     lambda = est1$lambda
     # Return relevant components needed later
+    
     return(listN(estimator, x_eval, density, h, method.h, kernel.type, lambda))
 }
 
-# Helper function to calculate AICc and related metrics
 calculateAICcNW <- function(X0, X1, X1Hat, h, lambda, density, Nobs, detS, kernelFunction) {
+    # Helper function to calculate AICc and related metrics
+    
     # Calculate tr(H) based on whether lambda is used
     if (is.null(lambda)) {
         # Original NWfield formula
@@ -415,10 +405,7 @@ bootstrapNWfieldErrors <- function(result, B = 500, chunk_size = nrow(result$x))
     
     # Initialize array to store bootstrap estimates directly
     # dimensions: [EvaluationPoint, Component (1 or 2), BootstrapReplicate]
-    estimators_array = array(
-        NA, 
-        dim = c(nEvalPoints, 2, B)
-    )
+    estimators_array = array(NA, dim = c(nEvalPoints, 2, B))
     
     # Setup progress bar if not in debug mode
     show_progress = !exists("DEBUG") || !DEBUG
@@ -455,18 +442,12 @@ bootstrapNWfieldErrors <- function(result, B = 500, chunk_size = nrow(result$x))
         estimators_array[, , b] = est_star$estimator
         
         # Update progress bar if shown
-        if (show_progress) {
-            utils::setTxtProgressBar(pb, b)
-        }
+        if (show_progress) { utils::setTxtProgressBar(pb, b) }
     }
     
     # Close progress bar if shown and print completion message
-    if (show_progress) {
-        close(pb)
-        cat("\nBootstrap completed.\n")
-    } else {
-        cat("Bootstrap completed.\n")
-    }
+    if (show_progress) { close(pb) } 
+    cat("\nBootstrap completed.\n")
     
     # Return the array of bootstrap estimates
     return(listN(estimators_array))

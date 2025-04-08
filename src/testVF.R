@@ -16,12 +16,12 @@ set.seed(1)
 X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 0.5*diag(2))
 
 # example 1 - double well ----
-# VF <- function(X){
-#     # X = (x,y)
-#     # U(X) = x^4 - x^2 + y^2
-#     # VF(X) = -grad U(X) = -(4x^3 - 2x, 2y)
-#     return( -0.1*c(4*X[1]^3 - 2*X[1], 2*X[2]) )
-# }
+VF <- function(X){
+    # X = (x,y)
+    # U(X) = x^4 - x^2 + y^2
+    # VF(X) = -grad U(X) = -(4x^3 - 2x, 2y)
+    return( -0.1*c(4*X[1]^3 - 2*X[1], 2*X[2]) )
+}
 
 # example 2 -- single well ----
 # VF <- function(X){
@@ -32,11 +32,11 @@ X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 0.5*diag(2))
 # }
 
 # example 3 -- rotation ----
-M = matrix(c(cos(pi/2), -sin(pi/2), sin(pi/2), cos(pi/2)),nrow=2,ncol=2)
-VF <- function(X){
-    # X = (x,y), theta = pi/4
-    return (M %*% X)
-}
+# M = matrix(c(cos(pi/2), -sin(pi/2), sin(pi/2), cos(pi/2)),nrow=2,ncol=2)
+# VF <- function(X){
+#     # X = (x,y), theta = pi/4
+#     return (M %*% X)
+# }
 
 # apply VF
 X1 = X0 + t(apply(X0, 1, VF)) +  matrix(rnorm(2*nObs),nrow=nObs) %*% matrix(c(0.01,0.005,0.005,0.02),nrow=2)
@@ -50,12 +50,13 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 
 # stima ----
 t0 = Sys.time()
-est_field_adaptive = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
+est_field_adaptive = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
                                      chunk_size=3000,
                                      sparse=FALSE, gc=TRUE)
-# est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
-#                                      chunk_size=1000,
-#                                      sparse=FALSE, gc=TRUE, alpha=0.5)
+est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
+                                     chunk_size=1000,
+                                     sparse=FALSE, gc=TRUE, alpha=0.5, 
+                                     hOpt = TRUE, alphaOpt = TRUE)
 # est = est_field_adaptive
 t = Sys.time() - t0
 
