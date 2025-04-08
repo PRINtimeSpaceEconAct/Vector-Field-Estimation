@@ -32,94 +32,94 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                     sparse=FALSE, gc=FALSE, chunk_size=nrow(x),
                     hOpt = FALSE, nGridh = 10) {
 
+    # Calculate differences for vector field
     Y1 = X1[,1] - X0[,1]
     Y2 = X1[,2] - X0[,2]
     
-    if (hOpt == TRUE){
-        Nobs = nrow(X0)
-        covX = cov(X0)
-        invS = solve(covX)
-        detS = det(covX)
-        # define grid of h
-        list.h = define_h_method.h(X0, NULL ,"silverman", kernel.type)
-        hStart = list.h$h/10
-        hEnd = list.h$h*2
-        hGrid = exp(log(hStart) + (log(hEnd) - log(hStart)) * (0:(nGridh-1))/(nGridh-1))
-        # define kernel function
-        kernelFunction = defineKernel(kernel.type)
-        
-        AICc = array(NA,dim = nGridh)
-        RSS = array(NA,dim = nGridh)
-        trH = array(NA,dim = nGridh)
-        if (DEBUG) trH_old = array(NA,dim = nGridh)
-        freedom = array(NA,dim = nGridh)
-        for (i in 1:nGridh){
-            if (DEBUG) print(paste("Computing h ", i, "/", nGridh, sep=""))
-            hi = hGrid[i]
-            # est1 = NWregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D, 
-            #                     method.h=method.h, h=hi, lambda=lambda,
-            #                     sparse=sparse, gc=gc, chunk_size=chunk_size)
-            # est2 = NWregression(X0, Y2, x=est1$x, nEval=nEval, kernel.type=kernel.type, D=D, 
-            #                     method.h=method.h, h=hi, lambda=lambda,
-            #                     sparse=sparse, gc=gc, chunk_size=chunk_size)
-            # VFhi = list(x = est1$x, estimator = cbind(est1$estimator, est2$estimator))
-            # X1Hat = forecastDiscrete(X0,VFhi,speedFactor=1,nPeriods=1)
-            
-            
-            # stima alla cazzo fatta sulle obs con un forecast solo
-            est1 = NWregression(X0, Y1, x=X0, nEval=nEval, kernel.type=kernel.type, D=D, 
-                                method.h=method.h, h=hi, lambda=lambda,
-                                sparse=sparse, gc=gc, chunk_size=chunk_size)
-            est2 = NWregression(X0, Y2, x=est1$x, nEval=nEval, kernel.type=kernel.type, D=D, 
-                                method.h=method.h, h=hi, lambda=lambda,
-                                sparse=sparse, gc=gc, chunk_size=chunk_size)
-            
-            X1Hat = X0 + cbind(est1$estimator, est2$estimator)
-            
-            if (DEBUG) trH_old[i] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum(1/est1$density)
-            trH[i] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
-            freedom[i] = (1 + (2*trH[i])/(2*Nobs))/(1 - (2*trH[i]+2)/(2*Nobs))
-            RSS[i] = det(cov(X1Hat - X1))
-            AICc[i] = log(RSS[i]) + freedom[i]
-            
-            # maxLength = max(sqrt(rowSums(VFhi$estimator)^2),na.rm=T)
-            # nPeriods = ceil(10*maxLength)
-            # X1Hat = forecastDiscrete(X0,VFhi,speedFactor=1/nPeriods,nPeriods=nPeriods)
-            # RSS[i] = sum(rowSums((X1Hat[,,nPeriods] - X1)^2,na.rm=TRUE))
-        }
+    # Initialize optimization variables
+    optVars = initializeOptimizationVariables()
 
-        h = hGrid[which.min(AICc)]
-        if (DEBUG) print(paste("Optimal h: ", format(h, digits=2, nsmall=2)))
-        if (DEBUG) print(paste("hGrid: ", paste(format(hGrid, digits=2, nsmall=2), collapse=" ")))
-        if (DEBUG) print(paste("trH: ", paste(format(trH, digits=2, nsmall=2), collapse=" ")))
-        if (DEBUG) print(paste("trH_old: ", paste(format(trH_old, digits=2, nsmall=2), collapse=" ")))
-        if (DEBUG) print(paste("freedom: ", paste(format(freedom, digits=2, nsmall=2), collapse=" ")))
-        if (DEBUG) print(paste("RSS: ", paste(format(RSS, digits=2, nsmall=2), collapse=" ")))
-        if (DEBUG) print(paste("AICc: ", paste(format(AICc, digits=2, nsmall=2), collapse=" ")))
-        
+    # Setup parameters and validate inputs - validation now happens in this function
+    optParams = setupOptimizationParameters(X0=X0, kernel.type=kernel.type,
+                                           hOpt=hOpt, nGridh=nGridh, h=h, method.h=method.h,
+                                           lambda=lambda, isAdaptive=FALSE)
+
+    # Get validated/determined parameters
+    h = optParams$h
+    method.h = optParams$method.h
+    optVars$best_h = h  # Initialize best_h with determined h
+
+    if (hOpt) {
+        optVars$hGrid = optParams$hGrid # Store grid if optimizing
+        optVars$debugArrays = debugInitArrays(optParams$nGridh_actual) # Use actual grid size
+        optVars$AICc_values = array(NA, dim = optParams$nGridh_actual)
+
+        # --- Optimization Loop ---
+        for (i in 1:optParams$nGridh_actual) {
+            debugPrint("Computing h %d/%d", i, optParams$nGridh_actual)
+            hi = optParams$hGrid[i]
+
+            est_components_i = computeNWFieldComponents(X0, Y1, Y2, x=X0, nEval=optParams$Nobs,
+                                                        kernel.type=kernel.type, D=D,
+                                                        method.h=method.h, h=hi, lambda=NULL,
+                                                        sparse=sparse, gc=gc, chunk_size=chunk_size) # Use full chunk_size? Check logic
+
+            X1Hat_i = X0 + est_components_i$estimator
+
+            metrics_i = calculateAICcNW(X0=X0, X1=X1, X1Hat=X1Hat_i, h=hi, lambda=NULL,
+                                            density=est_components_i$density, Nobs=optParams$Nobs,
+                                            detS=optParams$detS, kernelFunction=optParams$kernelFunction)
+
+            optVars$AICc_values[i] = metrics_i$AICc
+
+            optVars$debugArrays = debugStoreValues(optVars$debugArrays, i, NULL, # Use NULL for 1D
+                                                  AICc=metrics_i$AICc,
+                                                  RSS=metrics_i$RSS,
+                                                  trH=metrics_i$trH,
+                                                  freedom=metrics_i$freedom)
+
+            if (!is.na(metrics_i$AICc) && metrics_i$AICc < optVars$best_AICc) {
+                optVars$best_AICc = metrics_i$AICc
+                optVars$best_h = hi
+            }
+        }
+        # --- End Optimization Loop ---
+
+        h = optVars$best_h # Update h with the best found value
+        printOptimizationResults(hGrid = optVars$hGrid,
+                                 h = h,
+                                 arrays = optVars$debugArrays,
+                                 alpha = NULL,
+                                 alphaGrid = NULL)
+    }
+
+    # Final estimation using the chosen h (either provided, method-derived, or optimized)
+    final_x = if (is.null(x)) X0 else x
+    final_chunk_size = if (is.null(x)) nrow(X0) else chunk_size
+
+    final_est_components = computeNWFieldComponents(X0, Y1, Y2, x=final_x, nEval=nEval,
+                                                   kernel.type=kernel.type, D=D,
+                                                   method.h=method.h, h=h, lambda=NULL,
+                                                   sparse=sparse, gc=gc, chunk_size=final_chunk_size)
+
+    # Construct result object
+    result = listN(x = final_est_components$x,
+                   X0 = X0, X1 = X1,
+                   estimator = final_est_components$estimator,
+                   type.est = "NW",
+                   density = final_est_components$density,
+                   kernel.type = final_est_components$kernel.type,
+                   h = final_est_components$h, # Use h from final components
+                   method.h = final_est_components$method.h,
+                   lambda = NULL)
+
+    # Add optimization results if performed
+    if (hOpt){
+        result$AICc_values = optVars$AICc_values
+        result$hGrid = optVars$hGrid
     }
     
-    est1 = NWregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D, 
-                      method.h=method.h, h=h, lambda=lambda,
-                      sparse=sparse, gc=gc, chunk_size=chunk_size)
-    est2 = NWregression(X0, Y2, x=est1$x, nEval=nEval, kernel.type=kernel.type, D=D, 
-                      method.h=method.h, h=h, lambda=lambda,
-                      sparse=sparse, gc=gc, chunk_size=chunk_size)
-    
-    # Stack est1$estimator and est2$estimator
-    estimator = cbind(est1$estimator, est2$estimator)
-    x = est1$x
-    density = est1$density
-    h = est1$h
-    method.h = est1$method.h
-    kernel.type = est1$kernel.type
-    lambda = est1$lambda
-    type.est = "NW"
-    if (hOpt == TRUE){
-        return(listN(x, X0, X1, estimator, type.est, density, kernel.type, h, method.h, lambda, AICc))
-    } else {
-        return(listN(x, X0, X1, estimator, type.est, density, kernel.type, h, method.h, lambda))
-    }
+    return(result)
 }
 
 NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
@@ -127,277 +127,248 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                             sparse=FALSE, gc=FALSE, chunk_size=nrow(x), alpha = 0.5,
                             hOpt = FALSE, nGridh = 10, alphaOpt = FALSE, nGridAlpha = 5) {
     
-    # Hardcoded alpha range
-    alpha_start = 0
-    alpha_end = 0.9
-    
-    # Parameter validation
-    if (hOpt == TRUE && !is.null(h)) {
-        stop("Cannot specify h when hOpt is TRUE")
-    }
-    
-    if (alphaOpt == TRUE && !is.null(alpha) && alpha != 0.5) {
-        stop("Cannot specify alpha when alphaOpt is TRUE")
-    }
-    
+    # Calculate differences for vector field
     Y1 = X1[,1] - X0[,1]
     Y2 = X1[,2] - X0[,2]
     
-    if (hOpt == TRUE || alphaOpt == TRUE){
-        Nobs = nrow(X0)
-        covX = cov(X0)
-        invS = solve(covX)
-        detS = det(covX)
-        # define grid of h
-        list.h = define_h_method.h(X0, NULL ,"silverman", kernel.type)
-        hStart = list.h$h/10
-        hEnd = list.h$h*2
-        hGrid = exp(log(hStart) + (log(hEnd) - log(hStart)) * (0:(nGridh-1))/(nGridh-1))
-        # Define kernel function
-        kernelFunction = defineKernel(kernel.type)
-        
-        # Create arrays and variables based on whether we're optimizing alpha
+    # Initialize optimization variables
+    optVars = initializeOptimizationVariables()
+
+    # Setup parameters and validate inputs - validation now happens in this function
+    optParams = setupOptimizationParameters(X0=X0, kernel.type=kernel.type,
+                                           hOpt=hOpt, nGridh=nGridh, h=h, method.h=method.h,
+                                           alphaOpt=alphaOpt, nGridAlpha=nGridAlpha, alpha=alpha,
+                                           lambda=lambda, isAdaptive=TRUE)
+
+    # Get validated/determined parameters
+    current_h = optParams$h
+    current_method_h = optParams$method.h
+    current_alpha = optParams$alpha
+    
+    # Initialize best values based on fixed values if not optimizing
+    optVars$best_h = if(hOpt) NULL else current_h
+    optVars$best_alpha = if(alphaOpt) NULL else current_alpha
+
+    if (hOpt || alphaOpt) {
+        # Store grids from setup
+        optVars$hGrid = optParams$hGrid
+        optVars$alphaGrid = optParams$alphaGrid
+
+        # Initialize debug arrays and AICc storage based on optimization dimensions
         if (alphaOpt) {
-            # Define grid of alpha
-            alphaGrid = alpha_start + (alpha_end - alpha_start) * (0:(nGridAlpha-1))/(nGridAlpha-1)
-            
-            # Arrays to store results for all combinations of h and alpha
-            AICc_all = array(NA, dim = c(nGridh, nGridAlpha))
-            RSS_all = array(NA, dim = c(nGridh, nGridAlpha))
-            trH_all = array(NA, dim = c(nGridh, nGridAlpha))
-            freedom_all = array(NA, dim = c(nGridh, nGridAlpha))
+            optVars$debugArrays = debugInitArrays(optParams$nGridh_actual, optParams$nGridAlpha_actual)
+            optVars$AICc_values = array(NA, dim = c(optParams$nGridh_actual, optParams$nGridAlpha_actual))
         } else {
-            # Arrays to store results for h only
-            AICc_all = array(NA, dim = nGridh)
-            RSS_all = array(NA, dim = nGridh)
-            trH_all = array(NA, dim = nGridh)
-            freedom_all = array(NA, dim = nGridh)
-        }
-        
-        # Best values
-        best_AICc = Inf
-        best_h = NULL
-        best_alpha = if(alphaOpt) NULL else alpha
-        best_lambda = NULL
-        
-        for (i in 1:nGridh){
-            if (DEBUG) print(paste("Computing h ", i, "/", nGridh, sep=""))
-            hi = hGrid[i]
-            
-            # Compute pilot density estimation once for this h value
-            pilotDensity = densityEst2d(X0, x=X0, nEval=Nobs, kernel.type=kernel.type,
-                                       D=D, method.h=method.h, h=hi, sparse=sparse,
-                                       gc=gc, chunk_size=chunk_size)
-            # Compute g once for this density estimation
-            g = exp(mean(log(pilotDensity$estimator)))
-            
-            if (alphaOpt) {
-                # Loop over alpha values if alphaOpt is TRUE
-                for (j in 1:nGridAlpha) {
-                    if (DEBUG) print(paste("  Computing alpha ", j, "/", nGridAlpha, sep=""))
-                    alpha_j = alphaGrid[j]
-                    
-                    # Compute lambda using the formula without calling getLocalBandwidth again
-                    lambda_ij = (pilotDensity$estimator/g)^(-alpha_j)
-                    
-                    # stima alla cazzo fatta sulle obs con un forecast solo
-                    est1 = NWregression(X0, Y1, x=X0, nEval=nEval, kernel.type=kernel.type, D=D,
-                                        method.h=method.h, h=hi, lambda=lambda_ij,
-                                        sparse=sparse, gc=gc, chunk_size=chunk_size)
-                    est2 = NWregression(X0, Y2, x=est1$x, nEval=nEval, kernel.type=kernel.type, D=D,
-                                        method.h=method.h, h=hi, lambda=lambda_ij,
-                                        sparse=sparse, gc=gc, chunk_size=chunk_size)
-                    
-                    X1Hat = X0 + cbind(est1$estimator, est2$estimator)
-                    
-                    trH_all[i,j] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum((1/lambda_ij^2)*1/est1$density)
-                    #trH_all[i,j] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
-                    freedom_all[i,j] = (1 + (2*trH_all[i,j])/(2*Nobs))/(1 - (2*trH_all[i,j]+2)/(2*Nobs))
-                    RSS_all[i,j] = det(cov(X1Hat - X1))
-                    AICc_all[i,j] = log(RSS_all[i,j]) + freedom_all[i,j]
-                    
-                    # Check if this is the best combination so far
-                    if (AICc_all[i,j] < best_AICc) {
-                        best_AICc = AICc_all[i,j]
-                        best_h = hi
-                        best_alpha = alpha_j
-                        best_lambda = lambda_ij
-                    }
-                }
-            } else {
-                # If not optimizing alpha, use the provided alpha value
-                alpha_j = alpha
-                
-                # Compute lambda using the formula without calling getLocalBandwidth again
-                lambda_ij = (pilotDensity$estimator/g)^(-alpha_j)
-                
-                # stima alla cazzo fatta sulle obs con un forecast solo
-                est1 = NWregression(X0, Y1, x=X0, nEval=nEval, kernel.type=kernel.type, D=D,
-                                    method.h=method.h, h=hi, lambda=lambda_ij,
-                                    sparse=sparse, gc=gc, chunk_size=chunk_size)
-                est2 = NWregression(X0, Y2, x=est1$x, nEval=nEval, kernel.type=kernel.type, D=D,
-                                    method.h=method.h, h=hi, lambda=lambda_ij,
-                                    sparse=sparse, gc=gc, chunk_size=chunk_size)
-                
-                X1Hat = X0 + cbind(est1$estimator, est2$estimator)
-                
-                trH_all[i] = (kernelFunction(0,0)/(hi^2 * Nobs * sqrt(detS))) * sum((1/lambda_ij^2)*1/est1$density)
-                #trH_all[i] = kernelFunction(0,0) * sum(1/est1$kernel_sum)
-                freedom_all[i] = (1 + (2*trH_all[i])/(2*Nobs))/(1 - (2*trH_all[i]+2)/(2*Nobs))
-                RSS_all[i] = det(cov(X1Hat - X1))
-                AICc_all[i] = log(RSS_all[i]) + freedom_all[i]
-                
-                # Check if this is the best combination so far
-                if (AICc_all[i] < best_AICc) {
-                    best_AICc = AICc_all[i]
-                    best_h = hi
-                    best_lambda = lambda_ij
-                }
-            }
+            optVars$debugArrays = debugInitArrays(optParams$nGridh_actual) # 1D
+            optVars$AICc_values = array(NA, dim = optParams$nGridh_actual)
         }
 
-        # Set the optimal values
-        h = best_h
-        alpha = best_alpha
-        lambda = best_lambda
-        AICc = AICc_all
-        
-        if (DEBUG) {
-            print(paste("Optimal h:", format(h, digits=2, nsmall=2)))
-            print(paste("Optimal alpha:", format(alpha, digits=2, nsmall=2)))
-            print(paste("hGrid:", paste(format(hGrid, digits=2, nsmall=2), collapse=" ")))
-            
-            # Only print alphaGrid if alphaOpt is TRUE
-            if (alphaOpt) {
-                print(paste("alphaGrid:", paste(format(alphaGrid, digits=2, nsmall=2), collapse=" ")))
-                
-                # For 2D arrays (when alphaOpt is TRUE), print the full 2D matrices
-                
-                # Print trH matrix
-                cat("\ntrH values for all h and alpha combinations:\n")
-                cat("      ") # Space for row labels
-                for (j in 1:nGridAlpha) {
-                    cat(sprintf("alpha=%.2f ", alphaGrid[j]))
-                }
-                cat("\n")
-                
-                for (i in 1:nGridh) {
-                    cat(sprintf("h=%.2f ", hGrid[i]))
-                    for (j in 1:nGridAlpha) {
-                        cat(sprintf("%.2f     ", trH_all[i,j]))
-                    }
-                    cat("\n")
-                }
-                
-                # Print freedom matrix
-                cat("\nfreedom values for all h and alpha combinations:\n")
-                cat("      ") # Space for row labels
-                for (j in 1:nGridAlpha) {
-                    cat(sprintf("alpha=%.2f ", alphaGrid[j]))
-                }
-                cat("\n")
-                
-                for (i in 1:nGridh) {
-                    cat(sprintf("h=%.2f ", hGrid[i]))
-                    for (j in 1:nGridAlpha) {
-                        cat(sprintf("%.2f     ", freedom_all[i,j]))
-                    }
-                    cat("\n")
-                }
-                
-                # Print RSS matrix
-                cat("\n log(RSS) values for all h and alpha combinations:\n")
-                cat("      ") # Space for row labels
-                for (j in 1:nGridAlpha) {
-                    cat(sprintf("alpha=%.2f ", alphaGrid[j]))
-                }
-                cat("\n")
-                
-                for (i in 1:nGridh) {
-                    cat(sprintf("h=%.2f ", hGrid[i]))
-                    for (j in 1:nGridAlpha) {
-                        cat(sprintf("%.2f     ", log(RSS_all[i,j])))
-                    }
-                    cat("\n")
-                }
-                
-                # Print AICc matrix
-                cat("\nAICc values for all h and alpha combinations:\n")
-                cat("      ") # Space for row labels
-                for (j in 1:nGridAlpha) {
-                    cat(sprintf("alpha=%.2f ", alphaGrid[j]))
-                }
-                cat("\n")
-                
-                for (i in 1:nGridh) {
-                    cat(sprintf("h=%.2f ", hGrid[i]))
-                    for (j in 1:nGridAlpha) {
-                        cat(sprintf("%.2f     ", AICc_all[i,j]))
-                    }
-                    cat("\n")
-                }
-                
-                # Highlight the optimal values
-                cat(sprintf("\nOptimal values: h=%.2f, alpha=%.2f\n", h, alpha))
-            } else {
-                # For 1D arrays (when alphaOpt is FALSE), print in tabular format
-                
-                # Create a header
-                cat("\nValues for all h with fixed alpha=", format(alpha, digits=2, nsmall=2), ":\n", sep="")
-                cat(sprintf("%-10s %-10s %-10s %-10s %-10s\n", "h", "trH", "freedom", "RSS", "AICc"))
-                cat(sprintf("%-10s %-10s %-10s %-10s %-10s\n", "----------", "----------", "----------", "----------", "----------"))
-                
-                # Print each row
-                for (i in 1:nGridh) {
-                    cat(sprintf("%-10.2f %-10.2f %-10.2f %-10.2f %-10.2f\n",
-                                hGrid[i], trH_all[i], freedom_all[i], RSS_all[i], AICc_all[i]))
-                }
-                
-                # Highlight the optimal value
-                cat(sprintf("\nOptimal value: h=%.2f\n", h))
+
+        # --- Optimization Loop ---
+        for (i in 1:optParams$nGridh_actual) {
+            hi = optParams$hGrid[i] # Use h from the grid (single value if hOpt=F)
+            debugPrint("Computing h %d/%d (h=%.4f)", i, optParams$nGridh_actual, hi)
+
+            # Pilot density calculation (only depends on h)
+            # Pass method.h=NULL since h is explicitly given by hi
+            pilotDensity = densityEst2d(X0, x=X0, nEval=optParams$Nobs, kernel.type=kernel.type,
+                                       D=D, method.h=NULL, h=hi, sparse=sparse,
+                                       gc=gc, chunk_size=chunk_size)
+            # Check for zero or negative density values before log
+            valid_density_indices <- pilotDensity$estimator > 1e-10
+            if(sum(!valid_density_indices) > 0) {
+                warning(sprintf("Found %d zero or negative pilot density values at h=%.4f. Excluding them from geometric mean.", sum(!valid_density_indices), hi))
             }
+            if(all(!valid_density_indices)) {
+                 warning(sprintf("All pilot density values are zero or negative at h=%.4f. Cannot calculate lambda. Skipping this h.", hi))
+                 # Handle skipping in the loop? Or assign Inf AICc later?
+                 # For now, let g be NA or Inf which should cause issues downsteam handled by AICc NA/Inf check
+                 g = Inf
+            } else {
+                 g = exp(mean(log(pilotDensity$estimator[valid_density_indices])))
+            }
+
+
+            for (j in 1:optParams$nGridAlpha_actual) {
+                alpha_j = optParams$alphaGrid[j] # Use alpha from the grid (single value if alphaOpt=F)
+                if (alphaOpt) debugPrint("  Computing alpha %d/%d (alpha=%.4f)", j, optParams$nGridAlpha_actual, alpha_j)
+
+                # Handle case where g is Inf
+                if(is.infinite(g)) {
+                     lambda_ij = rep(Inf, length(pilotDensity$estimator)) # Assign Inf lambda
+                } else {
+                    lambda_ij = (pilotDensity$estimator / g)^(-alpha_j)
+                    # Handle potential Inf/NaN in lambda_ij if pilotDensity was zero
+                    lambda_ij[!valid_density_indices] = Inf # Assign Inf where density was bad
+                    lambda_ij[is.nan(lambda_ij)] = Inf # Replace potential NaN with Inf
+                }
+
+
+                # Pass method.h=NULL here, h=hi is explicit
+                est_components_ij = computeNWFieldComponents(X0, Y1, Y2, x=X0, nEval=optParams$Nobs,
+                                                             kernel.type=kernel.type, D=D,
+                                                             method.h=NULL, h=hi, lambda=lambda_ij,
+                                        sparse=sparse, gc=gc, chunk_size=chunk_size)
+                    
+                X1Hat_ij = X0 + est_components_ij$estimator
+
+                metrics_ij = calculateAICcNW(X0=X0, X1=X1, X1Hat=X1Hat_ij, h=hi, lambda=lambda_ij,
+                                                 density=est_components_ij$density, Nobs=optParams$Nobs,
+                                                 detS=optParams$detS, kernelFunction=optParams$kernelFunction)
+
+                # Store results and update best
+                aic_index_1 = i
+                aic_index_2 = if(alphaOpt) j else NULL
+
+                if (alphaOpt) {
+                   optVars$AICc_values[aic_index_1, aic_index_2] = metrics_ij$AICc
+                } else {
+                   optVars$AICc_values[aic_index_1] = metrics_ij$AICc # Index directly for 1D
+                }
+
+                 optVars$debugArrays = debugStoreValues(optVars$debugArrays, aic_index_1, aic_index_2,
+                                                       AICc=metrics_ij$AICc,
+                                                       RSS=metrics_ij$RSS,
+                                                       trH=metrics_ij$trH,
+                                                       freedom=metrics_ij$freedom)
+
+                if (!is.na(metrics_ij$AICc) && metrics_ij$AICc < optVars$best_AICc) {
+                    optVars$best_AICc = metrics_ij$AICc
+                    optVars$best_h = hi
+                    optVars$best_alpha = alpha_j
+                    optVars$best_lambda = lambda_ij # Store the lambda corresponding to best h/alpha
+                }
+            } # End alpha loop
+        } # End h loop
+        # --- End Optimization Loop ---
+
+        # Set the final parameters based on optimization results
+        current_h = optVars$best_h
+        current_alpha = optVars$best_alpha
+        final_lambda = optVars$best_lambda # Use the lambda found for the best parameters
+        current_method_h = if (hOpt) "optimized" else current_method_h # Update method if h was optimized
+
+        # Check if optimization failed to find a best h
+        if (is.null(current_h)) {
+             stop("Optimization failed to find a best value for h.")
         }
+
+        
+        # Print optimization results
+        printOptimizationResults(hGrid = if(hOpt) optVars$hGrid else NULL,
+                                 h = current_h,
+                                 arrays = optVars$debugArrays,
+                                 alpha = current_alpha,
+                                 alphaGrid = if(alphaOpt) optVars$alphaGrid else NULL)
+        
     } else {
-        # If not optimizing, use the provided h and alpha
-        # Get adaptive bandwidths using the provided h and alpha
-        lambda = getLocalBandwidth(X0, kernel.type=kernel.type, D=D, method.h=method.h, h=h,
-                                 sparse=sparse, gc=gc, chunk_size=chunk_size, alpha = alpha)
+        # No optimization: Calculate lambda directly from provided/determined h and alpha
+        # current_h and current_alpha were set after calling setupOptimizationParameters
+        # Pass method.h=NULL as h is explicitly known
+        final_lambda = getLocalBandwidth(X0, kernel.type=kernel.type, D=D, method.h=NULL, h=current_h,
+                                         sparse=sparse, gc=gc, chunk_size=chunk_size, alpha = current_alpha)
     }
-    
+
+    # Final estimation using the chosen/optimized parameters
+    final_x = if (is.null(x)) X0 else x
+    final_chunk_size = if (is.null(x)) nrow(X0) else chunk_size
+
+    # Ensure current_h is valid before proceeding (redundant check now, done after loop)
+    # if (is.null(current_h)) {
+    #     stop("Error: Optimal h could not be determined.")
+    # }
+
+    # Pass method.h=NULL as h is fixed
+    final_est_components = computeNWFieldComponents(X0, Y1, Y2, x=final_x, nEval=nEval,
+                                                   kernel.type=kernel.type, D=D,
+                                                   method.h=NULL, h=current_h, lambda=final_lambda,
+                                                   sparse=sparse, gc=gc, chunk_size=final_chunk_size)
+
+    # Construct result object
+    result = listN(x = final_est_components$x,
+                   X0 = X0, X1 = X1,
+                   estimator = final_est_components$estimator,
+                   type.est = "NW_adaptive",
+                   density = final_est_components$density,
+                   kernel.type = final_est_components$kernel.type,
+                   h = final_est_components$h, # Global h used
+                   method.h = current_method_h, # Report method used for h
+                   lambda = final_lambda, # Final lambda used (could be vector)
+                   alpha = current_alpha) # Alpha used for the final lambda
+
+
+    # Add optimization results if any optimization was performed
+    if (hOpt || alphaOpt){
+        result$AICc_values = optVars$AICc_values
+        if(hOpt) result$hGrid = optVars$hGrid
+        # result$alpha is already added above
+        if(alphaOpt) result$alphaGrid = optVars$alphaGrid
+    }
+
+
+    return(result)
+}
+
+# Helper function for core NW field component estimation
+computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, method.h, h, lambda, sparse, gc, chunk_size) {
     est1 = NWregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D,
                       method.h=method.h, h=h, lambda=lambda,
                       sparse=sparse, gc=gc, chunk_size=chunk_size)
-    est2 = NWregression(X0, Y2, x=est1$x, nEval=nEval, kernel.type=kernel.type, D=D,
+    # Use the evaluation points from the first estimate for the second
+    x_eval = est1$x
+    est2 = NWregression(X0, Y2, x=x_eval, nEval=nEval, kernel.type=kernel.type, D=D,
                       method.h=method.h, h=h, lambda=lambda,
                       sparse=sparse, gc=gc, chunk_size=chunk_size)
     
-    # Stack est1$estimator and est2$estimator
     estimator = cbind(est1$estimator, est2$estimator)
-    x = est1$x
-    density = est1$density
-    h = est1$h
-    method.h = est1$method.h
-    kernel.type = est1$kernel.type
-    type.est = "NW"
-    
-    # Create result object
-    result = listN(x, X0, X1, estimator, type.est, density, kernel.type, h, method.h, lambda)
-    
-    # Add optimization results
-    if (hOpt == TRUE || alphaOpt == TRUE){
-        result$AICc = AICc
-        result$hGrid = hGrid
-        
-        # Add alpha-related information only if alphaOpt is TRUE
-        if (alphaOpt == TRUE) {
-            result$alpha = alpha
-            result$alphaGrid = alphaGrid
-        } else if (hOpt == TRUE) {
-            # If only hOpt is TRUE, still include alpha but not alphaGrid
-            result$alpha = alpha
-        }
+
+    # Return relevant components needed later
+    list(
+        estimator = estimator,
+        x = x_eval,
+        density = est1$density, # Assuming density is the same for both est1 and est2 at x_eval
+        h = est1$h,
+        method.h = est1$method.h,
+        kernel.type = est1$kernel.type,
+        lambda = lambda # Pass lambda through
+    )
+}
+
+# Helper function to calculate AICc and related metrics
+calculateAICcNW <- function(X0, X1, X1Hat, h, lambda, density, Nobs, detS, kernelFunction) {
+    # Calculate tr(H) based on whether lambda is used
+    if (is.null(lambda)) {
+        # Original NWfield formula
+        trH = (kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum(1 / density)
+    } else {
+        # Adaptive NWfield formula
+        trH = (kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum((1 / lambda^2) * (1 / density))
     }
-    
-    return(result)
+
+    # Calculate degrees of freedom (using 2*Nobs for 2D response)
+    # Ensure denominator is not zero or negative
+    denominator = (1 - (2 * trH + 2) / (2 * Nobs))
+    if (denominator <= 1e-9) {
+        # Handle potential singularity or instability, e.g., return Inf AICc
+        # Or use a large penalty. Using Inf ensures this point isn't chosen.
+        warning(paste("Unstable AICc calculation: tr(H) =", trH, "Nobs =", Nobs))
+        freedom = Inf
+        AICc = Inf
+        RSS = NA # RSS might still be calculable, but AICc is compromised
+    } else {
+       freedom = (1 + (2 * trH) / (2 * Nobs)) / denominator
+       # Calculate Residual Sum of Squares (using determinant of covariance matrix)
+       RSS = det(cov(X1Hat - X1))
+       # Calculate AICc
+       AICc = log(RSS) + freedom
+    }
+
+
+    list(
+        AICc = AICc,
+        RSS = RSS,
+        trH = trH,
+        freedom = freedom
+    )
 }
 

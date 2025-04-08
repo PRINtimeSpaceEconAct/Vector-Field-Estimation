@@ -57,16 +57,13 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         switch(type.est,
                "density" = {
                    estimator[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est) 
-                   density[chunk] = estimator[chunk] 
-                   kernel_sum[chunk] = colSums(K) },
+                   density[chunk] = estimator[chunk]},
                "NW" = {
                    estimator[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est)
-                   density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density") 
-                   kernel_sum[chunk] = colSums(K) },
+                   density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density")  },
                "LL" = {
                    estimator[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est) 
-                   density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density") 
-                   kernel_sum[chunk] = colSums(K) },
+                    density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density")},
                {
                    stop(paste("Invalid type.est:", type.est, ". Must be either 'density' or 'NW'."))
                }
@@ -74,7 +71,7 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         if (gc == TRUE){ gc() }
     }
     
-    return(listN(x, estimator, density, kernel_sum, h, method.h, kernel.type, method.h))
+    return(listN(x, estimator, density, h, method.h, kernel.type))
 }
 
 
