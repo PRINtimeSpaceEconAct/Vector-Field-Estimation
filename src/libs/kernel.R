@@ -30,6 +30,12 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     density = numeric(nEval)
     kernel_sum = numeric(nEval)
     estimator = numeric(nEval)
+
+    # Start computing the trace of the H matrix needed for AICc if LL is used
+    if (type.est == "LL") {
+        partialTraceHLL = numeric(nEval)
+    }
+
     chunks = split(seq_len(nEval), ceiling(seq_len(nEval)/chunk_size))
     if (DEBUG) {
         print(paste("Computing ",length(chunks)," chunks"))
@@ -62,16 +68,21 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                    estimator[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est)
                    density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density")  },
                "LL" = {
-                   estimator[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est) 
-                    density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density")},
+                   LLoutputs = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est) 
+                   estimator[chunk] = LLoutputs$solutions
+                   partialTraceHLL[chunk] = LLoutputs$partialTraceHLL
+                   density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density")},
                {
                    stop(paste("Invalid type.est:", type.est, ". Must be either 'density' or 'NW'."))
                }
         )
         if (gc == TRUE){ gc() }
     }
-    
-    return(listN(x, estimator, density, h, method.h, kernel.type))
+    if (type.est == "LL") {
+        return(listN(x, estimator, density, h, method.h, kernel.type, partialTraceHLL))
+    } else {
+        return(listN(x, estimator, density, h, method.h, kernel.type))
+    }
 }
 
 
@@ -133,25 +144,12 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
             }
             
             # take only the first component of each element of the list 
-            solutions <- matrix(unlist(purrr::map(1:nEval, ~ solve_system(.x))),nrow=3,byrow = FALSE)[1,]            
-            return(solutions)
-            
-            # solve_system <- function(i) {
-            #     if ( det(MDenominator[,,i]) == 0 ) {
-            #         return(rep(NaN,3))
-            #     }
-            #     return(solve(MDenominator[,,i], bConstant[,i],tol=1e-32))
-            # }
-            
-            # purrr::map_d(1:100, ~ solve_system(.x))
-
-            # compute the determinant of MNumerator considering each matrix as a slice
-            # numerator =  apply(MNumerator, 3, det)
-            # denominator =  apply(MDenominator, 3, det)
-            
-            # numerator = determinant3(T0, S10, S20, T1, S11, S12, T2, S12, S22)
-            # denominator = determinant3(S0, S10, S20, S10, S11, S12, S20, S12, S22)
-            # return(numerator/denominator)
+            solutions <- matrix(unlist(purrr::map(1:nEval, ~ solve_system(.x))),nrow=3,byrow = FALSE)[1,]
+            partialTraceHLL = ((S11 * S22 - S12^2)/(S0 * (S11 * S22 - S12^2)
+                                                   - S10 * (S10 * S22 - S12 * S20)
+                                                   + S20 * (S20 * S12 - S11 * S20))
+                                )
+            return(listN(solutions, partialTraceHLL))
         }
     )
 

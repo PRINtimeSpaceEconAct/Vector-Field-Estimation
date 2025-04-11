@@ -58,12 +58,18 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         show_progress = !exists("DEBUG") || !DEBUG
         if (show_progress) {
             cat("Optimizing bandwidth parameter h...\n")
-            pb = utils::txtProgressBar(min = 0, max = optParams$nGridh_actual, style = 3) }
+            pb = createCustomProgressBar(min = 0, max = optParams$nGridh_actual)
+        }
         
         # --- Optimization Loop h ---
         for (i in 1:optParams$nGridh_actual) {
             debugPrint("Computing h %d/%d", i, optParams$nGridh_actual)
             hi = optParams$hGrid[i]
+
+            # Update progress bar with current parameter value
+            if (show_progress) {
+                pb$update(i, formatOptimParams(h = hi))
+            }
 
             # Use full chunk_size? Check logic
             est_components_i = computeNWFieldComponents(X0, Y1, Y2, x=X0, nEval=optParams$Nobs,
@@ -89,14 +95,11 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                 optVars$best_AICc = metrics_i$AICc
                 optVars$best_h = hi
             }
-            
-            # Update progress bar if shown
-            if (show_progress) { utils::setTxtProgressBar(pb, i) }
         }
         # --- End Optimization Loop h ---
         
         # Close progress bar if shown
-        if (show_progress) { close(pb) }
+        if (show_progress) { pb$close() }
 
         h = optVars$best_h # Update h with the best found value
         printOptimizationResults(hGrid = optVars$hGrid,
@@ -183,7 +186,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
             if (hOpt && alphaOpt) { print("Optimizing bandwidth parameter h and alpha...")
             } else if (hOpt) { print("Optimizing bandwidth parameter h...")
             } else { print("Optimizing alpha parameter...") }
-            pb = utils::txtProgressBar(min = 0, max = total_iterations, style = 3)
+            pb = createCustomProgressBar(min = 0, max = total_iterations)
             progress_counter = 0
         }
 
@@ -204,6 +207,16 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
             for (j in 1:optParams$nGridAlpha_actual) {
                 alpha_j = optParams$alphaGrid[j] # Use alpha from the grid (single value if alphaOpt=F)
                 if (alphaOpt) debugPrint("  Computing alpha %d/%d (alpha=%.4f)", j, optParams$nGridAlpha_actual, alpha_j)
+
+                # Update progress bar with current parameter values
+                if (show_progress) {
+                    progress_counter = progress_counter + 1
+                    if (alphaOpt) {
+                        pb$update(progress_counter, formatOptimParams(h = hi, alpha = alpha_j))
+                    } else {
+                        pb$update(progress_counter, formatOptimParams(h = hi))
+                    }
+                }
 
                 # Calculate lambda directly
                 lambda_ij = (pilotDensity$estimator / g)^(-alpha_j)
@@ -242,18 +255,12 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                     optVars$best_alpha = alpha_j
                     optVars$best_lambda = lambda_ij # Store the lambda corresponding to best h/alpha
                 }
-                
-                # Update progress bar if shown
-                if (show_progress) {
-                    progress_counter = progress_counter + 1
-                    utils::setTxtProgressBar(pb, progress_counter)
-                }
             } # End alpha loop
         } # End h loop
         # --- End Optimization Loop ---
         
         # Close progress bar if shown
-        if (show_progress) { close(pb) }
+        if (show_progress) { pb$close() }
 
         # Set the final parameters based on optimization results
         current_h = optVars$best_h
@@ -363,15 +370,12 @@ calculateAICcNW <- function(X0, X1, X1Hat, h, lambda, density, Nobs, detS, kerne
         # Or use a large penalty. Using Inf ensures this point isn't chosen.
         warning(paste("Unstable AICc calculation: tr(H) =", trH, "Nobs =", Nobs))
         freedom = Inf
-        AICc = Inf
-        RSS = NA # RSS might still be calculable, but AICc is compromised
     } else {
        freedom = (1 + (2 * trH) / (2 * Nobs)) / denominator
-       # Calculate Residual Sum of Squares (using determinant of covariance matrix)
-       RSS = det(cov(X1Hat - X1))
-       # Calculate AICc
-       AICc = log(RSS) + freedom
     }
+    RSS = det(cov(X1Hat - X1))
+    AICc = log(RSS) + freedom
+
 
 
     return(listN(AICc, RSS, trH, freedom))
@@ -411,7 +415,7 @@ bootstrapNWfieldErrors <- function(result, B = 500, chunk_size = nrow(result$x))
     show_progress = !exists("DEBUG") || !DEBUG
     if (show_progress) {
         cat("Running bootstrap with", B, "replicates...\n")
-        pb = utils::txtProgressBar(min = 0, max = B, style = 3)
+        pb = createCustomProgressBar(min = 0, max = B)
     } else {
         # Original progress reporting for debug mode
         cat("Starting bootstrap with", B, "replicates...\n")
@@ -423,6 +427,11 @@ bootstrapNWfieldErrors <- function(result, B = 500, chunk_size = nrow(result$x))
         X0_star = X0[idx_star, ]
         Y1_star = Y1[idx_star]
         Y2_star = Y2[idx_star]
+        
+        # Update progress bar with current iteration
+        if (show_progress) {
+            pb$update(b, paste("Bootstrap iteration", b, "/", B))
+        }
         
         # Handle adaptive vs non-adaptive cases
         current_lambda = NULL
@@ -440,15 +449,16 @@ bootstrapNWfieldErrors <- function(result, B = 500, chunk_size = nrow(result$x))
         
         # Store directly into the array
         estimators_array[, , b] = est_star$estimator
-        
-        # Update progress bar if shown
-        if (show_progress) { utils::setTxtProgressBar(pb, b) }
     }
     
     # Close progress bar if shown and print completion message
-    if (show_progress) { close(pb) } 
-    cat("\nBootstrap completed.\n")
-    
+    if (show_progress) { 
+        pb$close()
+        cat("Bootstrap completed.\n")
+    } else {
+        cat("\nBootstrap completed.\n")
+    }
+
     # Return the array of bootstrap estimates
     return(listN(estimators_array))
 }

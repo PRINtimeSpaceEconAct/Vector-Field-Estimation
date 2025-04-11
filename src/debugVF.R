@@ -55,18 +55,23 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 
 VFx = t(apply(x, 1, VF))
 # stima ----
-# est_field_LL = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
+# est_field_LL_opt = LLfield(X0, X1, x=X0 , kernel.type="gauss", method.h = "silverman",
 #                         chunk_size=1000,
-#                         sparse=FALSE, gc=TRUE)
+#                         sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL)
+
+
+# est_field_LL_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
+#                         chunk_size=1000,
+#                         sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha = NULL, alphaOpt = TRUE, nGridAlpha = 5)
 #est_field_NW_opt = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
 #                       chunk_size=1000,
 #                       sparse=FALSE, gc=TRUE, hOpt = TRUE)
 
 est_field_NW_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
                        chunk_size=1000,
-                       sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha=NULL, alphaOpt = TRUE, nGridAlpha=2)
+                       sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha=NULL, alphaOpt = TRUE)
 
-bootstrap_est_field_NW = bootstrapNWfieldErrors(est_field_NW_adaptive, B = 10, chunk_size = 1000)
+# bootstrap_est_field_NW = bootstrapNWfieldErrors(est_field_NW_adaptive, B = 10, chunk_size = 1000)
 
 #contour(x=est_field_NW_adaptive$hGrid,  y=est_field_NW_adaptive$alphaGrid, z=est_field_NW_adaptive$AICc)
 #indMin = which(est_field_NW_adaptive$AICc==min(est_field_NW_adaptive$AICc),arr.ind = TRUE)

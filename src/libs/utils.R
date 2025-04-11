@@ -343,4 +343,91 @@ printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alph
   }
 }
 
+# Custom progress bar that can display parameter values
+createCustomProgressBar <- function(min = 0, max = 1, initial = 0, 
+                                   width = getOption("width") - 35) {
+  # Initialize environment to store progress bar state
+  pb <- new.env(parent = emptyenv())
+  pb$min <- min
+  pb$max <- max
+  pb$width <- width
+  pb$current <- initial
+  pb$last_drawn <- -1
+  pb$start_time <- Sys.time()
+  pb$params <- ""
+  
+  # Function to set current value
+  update_progress <- function(value, params = NULL) {
+    pb$current <- value
+    if (!is.null(params)) {
+      pb$params <- params
+    }
+    
+    # Only redraw if significant progress was made or parameters changed
+    if (pb$current != pb$last_drawn || !is.null(params)) {
+      # Calculate percentage complete
+      pct <- (pb$current - pb$min) / (pb$max - pb$min)
+      pct <- max(0, min(1, pct))  # Ensure between 0 and 1
+      
+      # Calculate how many characters to fill
+      chars <- floor(pct * pb$width)
+      
+      # Calculate time elapsed and ETA
+      elapsed <- difftime(Sys.time(), pb$start_time, units = "secs")
+      if (pct > 0) {
+        eta <- as.numeric(elapsed) * (1 - pct) / pct
+        eta_text <- sprintf("ETA: %02d:%02d", floor(eta / 60), floor(eta %% 60))
+      } else {
+        eta_text <- "ETA: --:--"
+      }
+      
+      # Build progress bar string
+      bar <- paste0(
+        "[", 
+        paste(rep("=", chars), collapse = ""),
+        ">",
+        paste(rep(" ", pb$width - chars), collapse = ""),
+        "] ",
+        sprintf("%3d%%", floor(pct * 100)),
+        " | ", eta_text
+      )
+      
+      # Add parameter information if provided
+      if (pb$params != "") {
+        # Clear current line and print progress + parameters
+        cat("\r", bar, " | ", pb$params, "    ", sep = "")
+      } else {
+        # Clear current line and print progress only
+        cat("\r", bar, "    ", sep = "")
+      }
+      
+      pb$last_drawn <- pb$current
+    }
+  }
+  
+  # Function to close progress bar
+  close_progress <- function() {
+    cat("\n")
+  }
+  
+  # Return functions for usage
+  list(
+    update = update_progress,
+    close = close_progress
+  )
+}
+
+# Helper function to format optimization loop parameters for display
+formatOptimParams <- function(h = NULL, alpha = NULL) {
+  params <- ""
+  if (!is.null(h)) {
+    params <- paste0(params, "h=", format(h, digits=4, nsmall=4))
+  }
+  if (!is.null(alpha)) {
+    if (params != "") params <- paste0(params, ", ")
+    params <- paste0(params, "α=", format(alpha, digits=2, nsmall=2))
+  }
+  return(params)
+}
+
 
