@@ -373,7 +373,7 @@ calculateAICcNW <- function(X0, X1, X1Hat, h, lambda, density, Nobs, detS, kerne
     } else {
        freedom = (1 + (2 * trH) / (2 * Nobs)) / denominator
     }
-    RSS = det(cov(X1Hat - X1))
+    RSS = det(cov(X1Hat - X1),na.rm=T)
     AICc = log(RSS) + freedom
 
 

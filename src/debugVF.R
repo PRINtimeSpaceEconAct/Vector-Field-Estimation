@@ -1,7 +1,7 @@
 # Clear workspace and load dependencies
-#setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
+setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
 rm(list = ls())
-DEBUG = FALSE
+DEBUG = TRUE
 source("src/libs/loadLib.R")
 library(fields)
 library(latex2exp)
@@ -55,9 +55,20 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 
 VFx = t(apply(x, 1, VF))
 # stima ----
-# est_field_LL_opt = LLfield(X0, X1, x=X0 , kernel.type="gauss", method.h = "silverman",
-#                         chunk_size=1000,
-#                         sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL)
+est_field_LL_opt = NWfield(X0, X1, x=X0 , kernel.type="gauss", method.h = NULL,
+                        chunk_size=1000,
+                        sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL)
+
+# Find rows where the estimator has NA values
+na_rows <- which(is.na(est_field_LL_opt$estimator[,1]) | is.na(est_field_LL_opt$estimator[,2]))
+# Print the number of rows with NA values
+cat("Number of rows with NA values in the estimator:", length(na_rows), "\n")
+cat("X0 values corresponding to NA estimator values:\n")
+print(X0[na_rows, , drop = FALSE])
+# Plot X0 in a scatter plot
+plot(X0, pch = 19, col = "blue")
+# Add a red circle at the points where the estimator is NA
+points(X0[na_rows, , drop = FALSE], pch = 19, col = "red")
 
 
 # est_field_LL_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
@@ -67,9 +78,9 @@ VFx = t(apply(x, 1, VF))
 #                       chunk_size=1000,
 #                       sparse=FALSE, gc=TRUE, hOpt = TRUE)
 
-est_field_NW_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
-                       chunk_size=1000,
-                       sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha=NULL, alphaOpt = TRUE)
+# est_field_NW_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
+#                        chunk_size=1000,
+#                        sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha=NULL, alphaOpt = TRUE)
 
 # bootstrap_est_field_NW = bootstrapNWfieldErrors(est_field_NW_adaptive, B = 10, chunk_size = 1000)
 

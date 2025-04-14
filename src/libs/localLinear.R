@@ -356,12 +356,11 @@ calculateAICcLL <- function(X0, X1, X1Hat, h, lambda, partialTraceHLL, Nobs, det
         warning("There are NA values in partialTraceHLL. This will affect the calculation of tr(H).")
     }
 
-    
     # Calculate tr(H) based on whether lambda is used
     if (is.null(lambda)) {
         # Original LLfield formula
         # For LL regression, the trace of hat matrix has a different form than NW
-        trH = (kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum(partialTraceHLL, na.rm = TRUE) 
+        trH = (kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum(partialTraceHLL, na.rm = TRUE)
     } else {
         # Adaptive LLfield formula
         trH = (kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum((1 / lambda^2) * partialTraceHLL, na.rm = TRUE)
@@ -370,17 +369,15 @@ calculateAICcLL <- function(X0, X1, X1Hat, h, lambda, partialTraceHLL, Nobs, det
     # Calculate degrees of freedom (using 2*Nobs for 2D response)
     # Ensure denominator is not zero or negative
     denominator = (1 - (2 * trH + 2) / (2 * Nobs))
+    RSS = det( cov(X1Hat - X1,use="complete.obs"))
     if (denominator <= 1e-9) {
         # Handle potential singularity or instability, e.g., return Inf AICc
         # Or use a large penalty. Using Inf ensures this point isn't chosen.
         warning(paste("Unstable AICc calculation: tr(H) =", trH, "Nobs =", Nobs))
         freedom = Inf
         AICc = Inf
-        RSS = NA # RSS might still be calculable, but AICc is compromised
     } else {
        freedom = (1 + (2 * trH) / (2 * Nobs)) / denominator
-       # Calculate Residual Sum of Squares (using determinant of covariance matrix)
-       RSS = det(cov(X1Hat - X1))
        # Calculate AICc
        AICc = log(RSS) + freedom
     }
