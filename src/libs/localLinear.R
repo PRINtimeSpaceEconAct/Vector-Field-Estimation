@@ -360,10 +360,12 @@ calculateAICcLL <- function(X0, X1, X1Hat, h, lambda, partialTraceHLL, Nobs, det
     if (is.null(lambda)) {
         # Original LLfield formula
         # For LL regression, the trace of hat matrix has a different form than NW
-        trH = (kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum(partialTraceHLL, na.rm = TRUE)
+        # trH = (kernelFunction(0, 0) / ( Nobs * sqrt(detS))) * sum(partialTraceHLL, na.rm = TRUE)
+        
+        trH = sum(partialTraceHLL,na.rm=T)
     } else {
         # Adaptive LLfield formula
-        trH = (kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum((1 / lambda^2) * partialTraceHLL, na.rm = TRUE)
+        trH = (kernelFunction(0, 0) / ( Nobs * sqrt(detS))) * sum((1 / lambda^2) * partialTraceHLL, na.rm = TRUE)
     }
 
     # Calculate degrees of freedom (using 2*Nobs for 2D response)

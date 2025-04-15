@@ -31,12 +31,14 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     kernel_sum = numeric(nEval)
     estimator = numeric(nEval)
 
-    # Start computing the trace of the H matrix needed for AICc if LL is used
-    if (type.est == "LL") {
-        partialTraceHLL = numeric(nEval)
-    }
 
     chunks = split(seq_len(nEval), ceiling(seq_len(nEval)/chunk_size))
+    
+    # Start computing the trace of the H matrix needed for AICc if LL is used
+    if (type.est == "LL") {
+        partialTraceHLL = numeric(length(chunks))
+    }
+    
     if (DEBUG) {
         print(paste("Computing ",length(chunks)," chunks"))
         print(paste("Chunk size: ",chunk_size)) }
@@ -70,7 +72,8 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                "LL" = {
                    LLoutputs = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est) 
                    estimator[chunk] = LLoutputs$solutions
-                   partialTraceHLL[chunk] = LLoutputs$partialTraceHLL
+                   print("culo")
+                   partialTraceHLL[i] = LLoutputs$partialTraceHLL
                    density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density")},
                {
                    stop(paste("Invalid type.est:", type.est, ". Must be either 'density' or 'NW'."))
@@ -105,17 +108,24 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
         },
         "LL" = {
             K_scaledY = sweep(K_scaled, 1, Y, "*")
-
+            K_scaled_d1 = K_scaled * d1
+            K_scaled_d2 = K_scaled * d2
+            
+            # to compute tr(H)
+            if (nEval <= nObs){
+                tau = array(c(K_scaled,K_scaled_d1,K_scaled_d2),c(nObs,nEval,3))
+            }
+            
             S0 = colSums(K_scaled)
-            S10 = colSums(K_scaled * d1)
-            S20 = colSums(K_scaled * d2)
-            S12 = colSums(K_scaled * d1 * d2)
+            S10 = colSums(K_scaled_d1)
+            S20 = colSums(K_scaled_d2)
+            S12 = colSums(K_scaled_d1 * d2)
             S11 = colSums(K_scaled * d1^2)
             S22 = colSums(K_scaled * d2^2)
             T0 = colSums(K_scaledY)
             T1 = colSums(K_scaledY * d1)
             T2 = colSums(K_scaledY * d2)
-            
+        
             MNumerator = array(NA,dim=c(3,3,nEval))
             MNumerator[1,1,] = T0
             MNumerator[1,2,] = S10
@@ -145,10 +155,26 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
             
             # take only the first component of each element of the list 
             solutions <- matrix(unlist(purrr::map(1:nEval, ~ solve_system(.x))),nrow=3,byrow = FALSE)[1,]
-            partialTraceHLL = ((S11 * S22 - S12^2)/(S0 * (S11 * S22 - S12^2)
-                                                   - S10 * (S10 * S22 - S12 * S20)
-                                                   + S20 * (S20 * S12 - S11 * S20))
-                                )
+            
+            
+
+            # to compute tr(H)
+            if (nEval <= nObs){
+                
+                solve_trH <- function(i){
+                    if ( det(MDenominator[,,i]) == 0 ) {
+                        return(rep(NaN,3))
+                    }
+                    return((ginv(MDenominator[,,i]) %*% t(tau[,i,]))[1,i])
+                }
+                partialTraceHLL <- sum( unlist(purrr::map(1:nEval, ~ solve_trH(.x))) ,na.rm=T)
+                
+                # partialTraceHLL = ((S11 * S22 - S12^2)/(S0 * (S11 * S22 - S12^2)
+                #                                         - S10 * (S10 * S22 - S12 * S20)
+                #                                         + S20 * (S20 * S12 - S11 * S20)))
+
+            } else { partialTraceHLL = NULL }
+            
             return(listN(solutions, partialTraceHLL))
         }
     )

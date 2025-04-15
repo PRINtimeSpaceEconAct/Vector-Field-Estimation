@@ -55,28 +55,17 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 
 VFx = t(apply(x, 1, VF))
 # stima ----
-est_field_LL_opt = NWfield(X0, X1, x=X0 , kernel.type="gauss", method.h = NULL,
-                        chunk_size=1000,
-                        sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL)
-
-# Find rows where the estimator has NA values
-na_rows <- which(is.na(est_field_LL_opt$estimator[,1]) | is.na(est_field_LL_opt$estimator[,2]))
-# Print the number of rows with NA values
-cat("Number of rows with NA values in the estimator:", length(na_rows), "\n")
-cat("X0 values corresponding to NA estimator values:\n")
-print(X0[na_rows, , drop = FALSE])
-# Plot X0 in a scatter plot
-plot(X0, pch = 19, col = "blue")
-# Add a red circle at the points where the estimator is NA
-points(X0[na_rows, , drop = FALSE], pch = 19, col = "red")
+est_field_LL_opt = LLfield(X0, X1, x=X0 , kernel.type="gauss", method.h = NULL,
+                        chunk_size=500,
+                        sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, nGridh = 10)
 
 
 # est_field_LL_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
 #                         chunk_size=1000,
 #                         sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, alpha = NULL, alphaOpt = TRUE, nGridAlpha = 5)
-#est_field_NW_opt = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = "sj",
-#                       chunk_size=1000,
-#                       sparse=FALSE, gc=TRUE, hOpt = TRUE)
+est_field_NW_opt = NWfield(X0, X1, x=x, kernel.type="gauss",method.h = NULL,
+                       chunk_size=1000,
+                      sparse=FALSE, gc=TRUE, hOpt = TRUE)
 
 # est_field_NW_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
 #                        chunk_size=1000,
