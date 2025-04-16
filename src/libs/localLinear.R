@@ -27,6 +27,31 @@ LLregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", 
     return(est)
 }
 
+# Helper function for core LL field component estimation
+computeLLFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, 
+                             method.h, h, lambda, sparse, gc, chunk_size) {
+    
+    est1 = LLregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D,
+                      method.h=method.h, h=h, lambda=lambda,
+                      sparse=sparse, gc=gc, chunk_size=chunk_size)
+    
+    # Use the evaluation points from the first estimate for the second
+    x_eval = est1$x
+    est2 = LLregression(X0, Y2, x=x_eval, nEval=nEval, kernel.type=kernel.type, D=D,
+                      method.h=method.h, h=h, lambda=lambda,
+                      sparse=sparse, gc=gc, chunk_size=chunk_size)
+    
+    estimator = cbind(est1$estimator, est2$estimator)
+    density = est1$density
+    h = est1$h
+    method.h = est1$method.h
+    kernel.type = est1$kernel.type
+    lambda = est1$lambda
+    Hkk_values = est1$Hkk_values # Get the full vector of Hkk values
+    # Return relevant components needed later
+    return(listN(estimator, x_eval, density, h, method.h, kernel.type, lambda, Hkk_values))
+}
+
 
 LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                    method.h=NULL, h=NULL, lambda=NULL,
@@ -80,11 +105,11 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 
             X1Hat_i = X0 + est_components_i$estimator
 
-            metrics_i = calculateAICcLL(X0=X0, X1=X1, X1Hat=X1Hat_i, h=hi, lambda=NULL,
-                                            Hkk_values=est_components_i$Hkk_values,
-                                            Nobs=optParams$Nobs,
-                                            detS=optParams$detS, kernelFunction=optParams$kernelFunction)
-
+            metrics_i = calculateAICc(X0=X0, X1=X1, X1Hat=X1Hat_i, 
+                                          lambda=NULL, Nobs=optParams$Nobs,
+                                          kernelFunction=optParams$kernelFunction,
+                                          method="LL", Hkk_values=est_components_i$Hkk_values)
+            
             optVars$AICc_values[i] = metrics_i$AICc
 
             optVars$debugArrays = debugStoreValues(optVars$debugArrays, i, NULL, # Use NULL for 1D
@@ -231,11 +256,10 @@ LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                                                              sparse=sparse, gc=gc, chunk_size=chunk_size)
                     
                 X1Hat_ij = X0 + est_components_ij$estimator
-                metrics_ij = calculateAICcLL(X0=X0, X1=X1, X1Hat=X1Hat_ij, h=hi, lambda=lambda_ij,
-                                                Hkk_values=est_components_ij$Hkk_values,
-                                                Nobs=optParams$Nobs,
-                                                detS=optParams$detS, 
-                                                kernelFunction=optParams$kernelFunction)
+                metrics_ij = calculateAICc(X0=X0, X1=X1, X1Hat=X1Hat_ij, 
+                                                lambda=lambda_ij, Nobs=optParams$Nobs,
+                                                kernelFunction=optParams$kernelFunction,
+                                                method="LL", Hkk_values=est_components_ij$Hkk_values)
 
                 # Store results and update best
                 aic_index_1 = i
@@ -319,149 +343,4 @@ LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
     }
 
     return(result)
-}
-
-# Helper function for core LL field component estimation
-computeLLFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, 
-                             method.h, h, lambda, sparse, gc, chunk_size) {
-    
-    est1 = LLregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D,
-                      method.h=method.h, h=h, lambda=lambda,
-                      sparse=sparse, gc=gc, chunk_size=chunk_size)
-    
-    # Use the evaluation points from the first estimate for the second
-    x_eval = est1$x
-    est2 = LLregression(X0, Y2, x=x_eval, nEval=nEval, kernel.type=kernel.type, D=D,
-                      method.h=method.h, h=h, lambda=lambda,
-                      sparse=sparse, gc=gc, chunk_size=chunk_size)
-    
-    estimator = cbind(est1$estimator, est2$estimator)
-    density = est1$density
-    h = est1$h
-    method.h = est1$method.h
-    kernel.type = est1$kernel.type
-    lambda = est1$lambda
-    Hkk_values = est1$Hkk_values # Get the full vector of Hkk values
-    # Return relevant components needed later
-    return(listN(estimator, x_eval, density, h, method.h, kernel.type, lambda, Hkk_values))
-}
-
-calculateAICcLL <- function(X0, X1, X1Hat, h, lambda, Hkk_values, Nobs, detS, kernelFunction) {
-    # Helper function to calculate AICc and related metrics
-    # Print a warning if there are NA values in Hkk_values
-    if (any(is.na(Hkk_values))) {
-        warning("There are NA values in Hkk_values. This will affect the calculation of tr(H).")
-    }
-
-    # Calculate tr(H) based on whether lambda is used
-    if (is.null(lambda)) {
-        # Original LLfield formula
-        # For LL regression, the trace of hat matrix has a different form than NW
-        trH = kernelFunction(0, 0) * sum(Hkk_values, na.rm = TRUE)
-    } else {
-        # Adaptive LLfield formula - CORRECTED
-        # Check lengths before calculation if needed for robustness
-        # if (length(lambda) != length(Hkk_values)) stop("Length mismatch...") 
-        trH = kernelFunction(0, 0) * sum( Hkk_values / (lambda^2) , na.rm = TRUE)
-    }
-
-    # Calculate degrees of freedom (using 2*Nobs for 2D response)
-    # Ensure denominator is not zero or negative
-    denominator = (1 - (2 * trH + 2) / (2 * Nobs))
-    RSS = det( cov(X1Hat - X1,use="complete.obs"))
-    if (denominator <= 1e-9) {
-        # Handle potential singularity or instability, e.g., return Inf AICc
-        # Or use a large penalty. Using Inf ensures this point isn't chosen.
-        warning(paste("Unstable AICc calculation: tr(H) =", trH, "Nobs =", Nobs))
-        freedom = Inf
-        AICc = Inf
-    } else {
-       freedom = (1 + (2 * trH) / (2 * Nobs)) / denominator
-       # Calculate AICc
-       AICc = log(RSS) + freedom
-    }
-
-    return(listN(AICc, RSS, trH, freedom))
-}
-
-bootstrapLLfieldErrors <- function(result, B = 500, chunk_size = nrow(result$x)) {
-    # Extract necessary info from the original result object
-    X0 = result$X0
-    X1 = result$X1
-    x_eval = result$x
-    h_opt = result$h
-    kernel.type = result$kernel.type
-    method.h = result$method.h
-
-    # Infer the estimation type from the value of lambda in the result object
-    if (!is.null(result$lambda)) {
-        type.est = "Adaptive"
-    } else {
-        type.est = "Non_Adaptive"
-    }
-    
-    # Parameters specific to adaptive case
-    alpha_opt = if (!is.null(result$alpha)) result$alpha else NULL
-    
-    # Compute observation differences
-    Nobs = nrow(X0)
-    Y = X1 - X0
-    Y1 = Y[, 1]
-    Y2 = Y[, 2]
-    nEvalPoints = nrow(x_eval)
-    
-    # Initialize array to store bootstrap estimates directly
-    # dimensions: [EvaluationPoint, Component (1 or 2), BootstrapReplicate]
-    estimators_array = array(NA, dim = c(nEvalPoints, 2, B))
-    
-    # Setup progress bar if not in debug mode
-    show_progress = !exists("DEBUG") || !DEBUG
-    if (show_progress) {
-        cat("Running bootstrap with", B, "replicates...\n")
-        pb = createCustomProgressBar(min = 0, max = B)
-    } else {
-        # Original progress reporting for debug mode
-        cat("Starting bootstrap with", B, "replicates...\n")
-    }
-    
-    for (b in 1:B) {
-        # Resample indices with replacement
-        idx_star = sample(1:Nobs, Nobs, replace = TRUE)
-        X0_star = X0[idx_star, ]
-        Y1_star = Y1[idx_star]
-        Y2_star = Y2[idx_star]
-        
-        # Update progress bar with current iteration
-        if (show_progress) {
-            pb$update(b, paste("Bootstrap iteration", b, "/", B))
-        }
-        
-        # Handle adaptive vs non-adaptive cases
-        current_lambda = NULL
-        
-        if (type.est == "Adaptive") {
-            # Calculate adaptive bandwidth
-            current_lambda = getLocalBandwidth(X0_star, kernel.type=kernel.type, D=NULL, method.h=method.h,
-                                    h=NULL, sparse=FALSE, gc=FALSE, chunk_size=chunk_size, alpha = alpha_opt)
-        }
-        
-        # Re-estimate field components using fixed h_opt and appropriate lambda
-        est_star = computeLLFieldComponents(X0 = X0_star, Y1 = Y1_star, Y2 = Y2_star, x = x_eval, 
-            nEval = nEvalPoints, kernel.type = kernel.type, D = NULL, method.h = NULL, # h is fixed
-            h = h_opt, lambda = current_lambda, sparse = FALSE, gc = FALSE, chunk_size = chunk_size)
-        
-        # Store directly into the array
-        estimators_array[, , b] = est_star$estimator
-    }
-    
-    # Close progress bar if shown and print completion message
-    if (show_progress) { 
-        pb$close()
-        cat("Bootstrap completed.\n")
-    } else {
-        cat("\nBootstrap completed.\n")
-    }
-
-    # Return the array of bootstrap estimates
-    return(listN(estimators_array))
 }

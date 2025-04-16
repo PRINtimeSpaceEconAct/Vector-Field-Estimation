@@ -8,6 +8,7 @@ library(emdbook)
 library(pracma)
 
 source("src/libs/utils.R")
+source("src/libs/prettyprinting.R")
 source("src/libs/distances.R")
 source("src/libs/kernel.R")
 source("src/libs/density.R")
