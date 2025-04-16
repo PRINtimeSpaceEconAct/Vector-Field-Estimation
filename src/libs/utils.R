@@ -246,8 +246,8 @@ printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alph
   }
   print(paste("hGrid:", paste(format(hGrid, digits=2, nsmall=2), collapse=" ")))
   
-  # 2D case - both h and alpha were optimized
-  if (!is.null(alphaGrid) && !is.null(alpha)) {
+  # 2D case - alpha was optimized (alphaGrid exists), regardless of final optimal alpha
+  if (!is.null(alphaGrid)) {
     print(paste("alphaGrid:", paste(format(alphaGrid, digits=2, nsmall=2), collapse=" ")))
     
     if (is.null(arrays) || length(arrays) == 0) return()
@@ -319,7 +319,7 @@ printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alph
     # Highlight the optimal values
     cat(sprintf("\nOptimal values: h=%.2f, alpha=%.2f\n", h, alpha))
   } 
-  # 1D case - only h was optimized
+  # 1D case - only h was optimized OR alpha was fixed
   else {
     if (is.null(arrays) || length(arrays) == 0) return()
     

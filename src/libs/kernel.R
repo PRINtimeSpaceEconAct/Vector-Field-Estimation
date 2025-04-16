@@ -36,7 +36,8 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     
     # Start computing the trace of the H matrix needed for AICc if LL is used
     if (type.est == "LL") {
-        partialTraceHLL = numeric(length(chunks))
+        # Pre-allocate the full vector for Hkk values
+        Hkk_values = numeric(nEval) 
     }
     
     if (DEBUG) {
@@ -70,11 +71,12 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                    estimator[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est)
                    density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density")  },
                "LL" = {
+                   # Pass kernelFunction, lambda vector, and chunk indices
                    LLoutputs = computeTerms(D_chunk, Y, h, detS, K_scaled, type.est) 
                    estimator[chunk] = LLoutputs$solutions
-                   print("culo")
-                   partialTraceHLL[i] = LLoutputs$partialTraceHLL
-                   density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density")},
+                   # Assign Hkk values directly using chunk indices
+                   Hkk_values[chunk] = LLoutputs$Hkk_values_chunk
+                   density[chunk] = computeTerms(D_chunk, Y, h, detS, K_scaled, "density")  },
                {
                    stop(paste("Invalid type.est:", type.est, ". Must be either 'density' or 'NW'."))
                }
@@ -82,7 +84,7 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         if (gc == TRUE){ gc() }
     }
     if (type.est == "LL") {
-        return(listN(x, estimator, density, h, method.h, kernel.type, partialTraceHLL))
+        return(listN(x, estimator, density, h, method.h, kernel.type, Hkk_values))
     } else {
         return(listN(x, estimator, density, h, method.h, kernel.type))
     }
@@ -90,9 +92,10 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 
 
 
-computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
+computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){ 
     nObs = dim(distances$z1)[1]
-    nEval = dim(distances$z1)[2]
+    # nEval here is the size of the current chunk
+    nEval_chunk = dim(distances$z1)[2] 
     d1 = distances$z1
     d2 = distances$z2
 
@@ -107,14 +110,10 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
             return(numerator/denominator)
         },
         "LL" = {
+
             K_scaledY = sweep(K_scaled, 1, Y, "*")
             K_scaled_d1 = K_scaled * d1
             K_scaled_d2 = K_scaled * d2
-            
-            # to compute tr(H)
-            if (nEval <= nObs){
-                tau = array(c(K_scaled,K_scaled_d1,K_scaled_d2),c(nObs,nEval,3))
-            }
             
             S0 = colSums(K_scaled)
             S10 = colSums(K_scaled_d1)
@@ -126,56 +125,47 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
             T1 = colSums(K_scaledY * d1)
             T2 = colSums(K_scaledY * d2)
         
-            MNumerator = array(NA,dim=c(3,3,nEval))
-            MNumerator[1,1,] = T0
-            MNumerator[1,2,] = S10
-            MNumerator[1,3,] = S20
-            MNumerator[2,1,] = T1
-            MNumerator[2,2,] = S11
-            MNumerator[2,3,] = S12
-            MNumerator[3,1,] = T2
-            MNumerator[3,2,] = S12
-            MNumerator[3,3,] = S22
-            
-            MDenominator = MNumerator
+            # MDenominator[,,k] is the S_k matrix for the k-th observation IN THE CHUNK
+            MDenominator = array(NA,dim=c(3,3,nEval_chunk))
             MDenominator[1,1,] = S0
+            MDenominator[1,2,] = S10
+            MDenominator[1,3,] = S20
             MDenominator[2,1,] = S10
+            MDenominator[2,2,] = S11
+            MDenominator[2,3,] = S12
             MDenominator[3,1,] = S20
+            MDenominator[3,2,] = S12
+            MDenominator[3,3,] = S22
             
+            # Keep calculation for solutions (estimator)
             bConstant = rbind(T0,T1,T2)
-
-            solve_system <- function(i) {
-                # if ( cond(MDenominator[,,i]) > 1/.Machine$double.eps ) {
-                if ( det(MDenominator[,,i]) == 0 ) {
+            solve_system <- function(k) { # k is index within chunk (1 to nEval_chunk)
+                if ( det(MDenominator[,,k]) == 0 ) {
                     return(rep(NaN,3))
                 }
-                return(as.numeric(ginv(MDenominator[,,i]) %*% bConstant[,i]))
-                # return(as.numeric(solve(MDenominator[,,i]) %*% bConstant[,i]))
+                return(as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k]))
+            }
+            solutions <- matrix(unlist(purrr::map(1:nEval_chunk, ~ solve_system(.x))),nrow=3,byrow = FALSE)[1,]
+            
+            calculate_Hkk <- function(k) { # k is index within chunk (1 to nEval_chunk)
+                Sk = MDenominator[,,k]
+                # Check for singularity
+                if ( det(Sk) == 0 ) {
+                    return(NaN)
+                }
+                Hkk = ginv(Sk)[1, 1]
+                return(Hkk)
             }
             
-            # take only the first component of each element of the list 
-            solutions <- matrix(unlist(purrr::map(1:nEval, ~ solve_system(.x))),nrow=3,byrow = FALSE)[1,]
+            # Sum Hkk over the observations in this chunk
+            # Note: The condition if (nEval_chunk <= nObs) might not be strictly necessary
+            # for the trace calculation itself, unless memory for MDenominator is an issue.
+            # AICc is usually calculated when fitting to the original data (nEval=nObs).
+            # We compute it regardless, based on the assumption x=X was intended for AICc.
+            Hkk_values_chunk <- unlist(purrr::map(1:nEval_chunk, ~ calculate_Hkk(.x))) 
             
-            
-
-            # to compute tr(H)
-            if (nEval <= nObs){
-                
-                solve_trH <- function(i){
-                    if ( det(MDenominator[,,i]) == 0 ) {
-                        return(rep(NaN,3))
-                    }
-                    return((ginv(MDenominator[,,i]) %*% t(tau[,i,]))[1,i])
-                }
-                partialTraceHLL <- sum( unlist(purrr::map(1:nEval, ~ solve_trH(.x))) ,na.rm=T)
-                
-                # partialTraceHLL = ((S11 * S22 - S12^2)/(S0 * (S11 * S22 - S12^2)
-                #                                         - S10 * (S10 * S22 - S12 * S20)
-                #                                         + S20 * (S20 * S12 - S11 * S20)))
-
-            } else { partialTraceHLL = NULL }
-            
-            return(listN(solutions, partialTraceHLL))
+            # Return solutions and the vector of Hkk values for this chunk
+            return(listN(solutions, Hkk_values_chunk))
         }
     )
 

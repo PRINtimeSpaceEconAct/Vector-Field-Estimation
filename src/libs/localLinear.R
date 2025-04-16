@@ -81,7 +81,7 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
             X1Hat_i = X0 + est_components_i$estimator
 
             metrics_i = calculateAICcLL(X0=X0, X1=X1, X1Hat=X1Hat_i, h=hi, lambda=NULL,
-                                            partialTraceHLL=est_components_i$partialTraceHLL,
+                                            Hkk_values=est_components_i$Hkk_values,
                                             Nobs=optParams$Nobs,
                                             detS=optParams$detS, kernelFunction=optParams$kernelFunction)
 
@@ -124,7 +124,7 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                    estimator = final_est_components$estimator,
                    type.est = "LL",
                    density = final_est_components$density,
-                   partialTraceHLL = final_est_components$partialTraceHLL,
+                   Hkk_values = final_est_components$Hkk_values,
                    kernel.type = final_est_components$kernel.type,
                    h = final_est_components$h, # Use h from final components
                    method.h = final_est_components$method.h,
@@ -232,7 +232,7 @@ LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                     
                 X1Hat_ij = X0 + est_components_ij$estimator
                 metrics_ij = calculateAICcLL(X0=X0, X1=X1, X1Hat=X1Hat_ij, h=hi, lambda=lambda_ij,
-                                                partialTraceHLL=est_components_ij$partialTraceHLL,
+                                                Hkk_values=est_components_ij$Hkk_values,
                                                 Nobs=optParams$Nobs,
                                                 detS=optParams$detS, 
                                                 kernelFunction=optParams$kernelFunction)
@@ -271,9 +271,6 @@ LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
         current_alpha = optVars$best_alpha
         final_lambda = optVars$best_lambda # Use the lambda found for the best parameters
 
-        # Check if optimization failed to find a best h
-        if (is.null(current_h)) { stop("Optimization failed to find a best value for h.") }
-
         
         # Print optimization results
         printOptimizationResults(hGrid = if(hOpt) optVars$hGrid else NULL,
@@ -305,7 +302,7 @@ LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                    estimator = final_est_components$estimator,
                    type.est = "LL_adaptive",
                    density = final_est_components$density,
-                   partialTraceHLL = final_est_components$partialTraceHLL,
+                   Hkk_values = final_est_components$Hkk_values,
                    kernel.type = final_est_components$kernel.type,
                    h = final_est_components$h, # Global h used
                    method.h = current_method_h, # Report method used for h
@@ -344,28 +341,28 @@ computeLLFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D,
     method.h = est1$method.h
     kernel.type = est1$kernel.type
     lambda = est1$lambda
-    partialTraceHLL = est1$partialTraceHLL
+    Hkk_values = est1$Hkk_values # Get the full vector of Hkk values
     # Return relevant components needed later
-    return(listN(estimator, x_eval, density, h, method.h, kernel.type, lambda, partialTraceHLL))
+    return(listN(estimator, x_eval, density, h, method.h, kernel.type, lambda, Hkk_values))
 }
 
-calculateAICcLL <- function(X0, X1, X1Hat, h, lambda, partialTraceHLL, Nobs, detS, kernelFunction) {
+calculateAICcLL <- function(X0, X1, X1Hat, h, lambda, Hkk_values, Nobs, detS, kernelFunction) {
     # Helper function to calculate AICc and related metrics
-    # Print a warning if there are NA values in partialTraceHLL
-    if (any(is.na(partialTraceHLL))) {
-        warning("There are NA values in partialTraceHLL. This will affect the calculation of tr(H).")
+    # Print a warning if there are NA values in Hkk_values
+    if (any(is.na(Hkk_values))) {
+        warning("There are NA values in Hkk_values. This will affect the calculation of tr(H).")
     }
 
     # Calculate tr(H) based on whether lambda is used
     if (is.null(lambda)) {
         # Original LLfield formula
         # For LL regression, the trace of hat matrix has a different form than NW
-        # trH = (kernelFunction(0, 0) / ( Nobs * sqrt(detS))) * sum(partialTraceHLL, na.rm = TRUE)
-        
-        trH = sum(partialTraceHLL,na.rm=T)
+        trH = kernelFunction(0, 0) * sum(Hkk_values, na.rm = TRUE)
     } else {
-        # Adaptive LLfield formula
-        trH = (kernelFunction(0, 0) / ( Nobs * sqrt(detS))) * sum((1 / lambda^2) * partialTraceHLL, na.rm = TRUE)
+        # Adaptive LLfield formula - CORRECTED
+        # Check lengths before calculation if needed for robustness
+        # if (length(lambda) != length(Hkk_values)) stop("Length mismatch...") 
+        trH = kernelFunction(0, 0) * sum( Hkk_values / (lambda^2) , na.rm = TRUE)
     }
 
     # Calculate degrees of freedom (using 2*Nobs for 2D response)
