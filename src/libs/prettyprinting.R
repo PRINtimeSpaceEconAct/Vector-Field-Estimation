@@ -1,6 +1,10 @@
-# Debug utilities
+#' Utility functions for debugging and pretty printing optimization results
+#' 
 
-# Debug print function - only prints if DEBUG is TRUE
+#' Prints debug messages only when DEBUG is TRUE
+#' 
+#' @param message The message to print
+#' @param ... Additional arguments for sprintf formatting
 debugPrint <- function(message, ...) {
   if (exists("DEBUG") && DEBUG) {
     if (length(list(...)) > 0) {
@@ -11,7 +15,12 @@ debugPrint <- function(message, ...) {
   }
 }
 
-# Creates arrays for debug information
+#' Initializes arrays for storing debug information during optimization
+#' 
+#' @param dim1 First dimension size (number of h values)
+#' @param dim2 Second dimension size (number of alpha values, if applicable)
+#' 
+#' @return A list of arrays for storing debugging metrics
 debugInitArrays <- function(dim1, dim2 = NULL) {
   if (exists("DEBUG") && DEBUG) {
     if (is.null(dim2)) {
@@ -38,7 +47,17 @@ debugInitArrays <- function(dim1, dim2 = NULL) {
   }
 }
 
-# Store debug values in arrays
+#' Stores debug values in arrays during optimization
+#' 
+#' @param arrays List of arrays to store values in
+#' @param i First index (h index)
+#' @param j Second index (alpha index, if applicable)
+#' @param AICc AICc value to store
+#' @param RSS RSS value to store
+#' @param trH Trace of hat matrix value to store
+#' @param freedom Degrees of freedom value to store
+#' 
+#' @return Updated arrays with new values stored
 debugStoreValues <- function(arrays, i, j = NULL, AICc = NA, RSS = NA, trH = NA, freedom = NA) {
   if (exists("DEBUG") && DEBUG && length(arrays) > 0) {
     if (is.null(j)) {
@@ -58,7 +77,13 @@ debugStoreValues <- function(arrays, i, j = NULL, AICc = NA, RSS = NA, trH = NA,
   return(arrays)
 }
 
-# Print optimization results for both 1D and 2D cases
+#' Prints optimization results in a formatted way
+#' 
+#' @param hGrid Vector of h values used in optimization
+#' @param h Optimal h value
+#' @param arrays List of arrays containing debug information (AICc, RSS, trH, freedom)
+#' @param alpha Optimal alpha value (if applicable)
+#' @param alphaGrid Vector of alpha values used in optimization (if applicable)
 printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alphaGrid = NULL) {
   if (!exists("DEBUG") || !DEBUG) return()
   
@@ -165,7 +190,14 @@ printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alph
   }
 }
 
-# Custom progress bar that can display parameter values
+#' Creates a custom progress bar with parameter display for optimization
+#' 
+#' @param min Minimum value of the progress bar (default: 0)
+#' @param max Maximum value of the progress bar (default: 1)
+#' @param initial Initial value of the progress bar (default: 0)
+#' @param width Width of the progress bar in characters (default: console width - 35)
+#' 
+#' @return A list of functions to update and close the progress bar
 createCustomProgressBar <- function(min = 0, max = 1, initial = 0, 
                                    width = getOption("width") - 35) {
   # Initialize environment to store progress bar state
@@ -239,7 +271,12 @@ createCustomProgressBar <- function(min = 0, max = 1, initial = 0,
   )
 }
 
-# Helper function to format optimization loop parameters for display
+#' Formats optimization parameters for display in progress bar
+#' 
+#' @param h Bandwidth parameter value (optional)
+#' @param alpha Alpha parameter value for adaptive bandwidth (optional)
+#' 
+#' @return A formatted string representation of the parameters
 formatOptimParams <- function(h = NULL, alpha = NULL) {
   params <- ""
   if (!is.null(h)) {

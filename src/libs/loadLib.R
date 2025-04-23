@@ -1,3 +1,9 @@
+#' Loads all required libraries and source files for vector field estimation
+#' 
+#' This script loads the necessary R packages and sources all the local
+#' library files needed for vector field estimation. It should be called
+#' before using any of the vector field estimation functions.
+#'
 library(extremefit)
 library(Matrix)
 library(spatstat)

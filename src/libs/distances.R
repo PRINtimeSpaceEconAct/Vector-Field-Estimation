@@ -1,6 +1,17 @@
 require(Matrix)
 require(spatstat)
  
+#' Computes distance components between data points and evaluation points
+#' 
+#' @param X Matrix of data points (nObs x 2)
+#' @param x Matrix of evaluation points (nEval x 2)
+#' @param A Covariance matrix of X (not used)
+#' @param dMax Maximum distance to consider, 0 otherwise (not used)
+#' @param sparse Whether to return sparse matrices (default: TRUE)
+#' 
+#' @return A list containing two matrices of differences (nObs x nEval) as regular or sparse matrices:
+#'         \item{z1}{Differences in the first dimension}
+#'         \item{z2}{Differences in the second dimension}
 computeDcomponents <- function(X,x,A=NULL,dMax=NULL,sparse=TRUE){
     # X = matrix of data points (nObs x 2)
     # x = matrix of evaluation points (nEval x 2)
@@ -32,7 +43,14 @@ computeDcomponents <- function(X,x,A=NULL,dMax=NULL,sparse=TRUE){
 }
 
 
-
+#' Computes Mahalanobis distances between data points and evaluation points
+#' 
+#' @param z1 Matrix of differences in first dimension (nObs x nEval)
+#' @param z2 Matrix of differences in second dimension (nObs x nEval)
+#' @param A Inverse of covariance matrix of observations (2 x 2)
+#' @param den Vector of length nObs for denominators
+#' 
+#' @return Matrix of Mahalanobis distances (nObs x nEval)
 mahalanobis <- function(z1,z2,A,den){
     # z1,z2 = matrices of differences on both components (nObs x nEval)
     # A inverse of covariance matrix of observations (2 x 2)

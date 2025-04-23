@@ -1,3 +1,8 @@
+#' Creates a named list from variables using their names
+#' 
+#' @param ... Variables to include in the list
+#' 
+#' @return A list with names matching the variable names
 listN <- function(...){
     # automatically give names to list elements = var name
     anonList <- list(...)
@@ -5,6 +10,12 @@ listN <- function(...){
     anonList
 }
 
+#' Defines a grid of evaluation points over a 2D domain
+#' 
+#' @param X Matrix of points that define the domain boundaries (nObs x 2)
+#' @param nEval Total number of evaluation points to generate
+#' 
+#' @return A matrix of evaluation points arranged in a grid (nEval x 2)
 defineEvalPoints <- function(X,nEval){
     xGrid = seq(from=min(X[,1]), to=max(X[,1]), length.out=round(sqrt(nEval)))
     yGrid = seq(from=min(X[,2]), to=max(X[,2]), length.out=round(sqrt(nEval)))
@@ -12,6 +23,16 @@ defineEvalPoints <- function(X,nEval){
     return(x)
 }
 
+#' Determines bandwidth parameter h and method for kernel estimation
+#' 
+#' @param X Matrix of data points (nObs x 2)
+#' @param h Bandwidth parameter (if NULL, determined by method.h)
+#' @param method.h Method for bandwidth selection (if NULL and h is NULL, defaults to "silverman")
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' 
+#' @return A list containing:
+#'   \item{h}{Bandwidth parameter determined}
+#'   \item{method.h}{Method used for bandwidth selection}
 define_h_method.h <- function(X=X, h=h, method.h=method.h, kernel.type="gauss") {
     # Check for conflicting bandwidth specifications
     if (!is.null(h) && !is.null(method.h)) {
@@ -46,6 +67,13 @@ define_h_method.h <- function(X=X, h=h, method.h=method.h, kernel.type="gauss") 
     return(listN(h, method.h))
 }
 
+#' Interpolates a 2D vector field at specified points
+#' 
+#' @param z Matrix of points where to interpolate (nInterp x 2)
+#' @param x Matrix of evaluation points where the vector field is known (nEval x 2)
+#' @param VF Matrix of vector field values at x (nEval x 2)
+#' 
+#' @return Matrix of interpolated vector field values at z (nInterp x 2)
 interp2d <- function(z,x,VF){
     # z = where to interpolate <- (nInterp x 2)
     # x = evaluation points where f is computed <- (nEval x 2)
@@ -57,6 +85,13 @@ interp2d <- function(z,x,VF){
     return(cbind(VFz1,VFz2))
 }
 
+#' Interpolates a scalar function at specified points in 2D
+#' 
+#' @param z Matrix of points where to interpolate (nInterp x 2)
+#' @param x Matrix of evaluation points where the function is known (nEval x 2)
+#' @param f Vector of function values at x (nEval)
+#' 
+#' @return Vector of interpolated function values at z (nInterp)
 interp1d <- function(z,x,f){
     # z = where to interpolate <- (nInterp x 2)
     # x = evaluation points where f is computed <- (nEval x 2)
@@ -69,7 +104,17 @@ interp1d <- function(z,x,f){
     return(interpZ)
 }
 
-# Initialize variables used for optimization loops and storing results
+#' Initializes variables used for optimization in kernel methods
+#' 
+#' @return A list of initialized optimization variables:
+#'   \item{AICc_values}{NULL, will store AICc values during optimization}
+#'   \item{hGrid}{NULL, will store grid of h values}
+#'   \item{alphaGrid}{NULL, will store grid of alpha values}
+#'   \item{best_AICc}{Inf, will store best AICc value found}
+#'   \item{best_h}{NULL, will store best h value found}
+#'   \item{best_alpha}{NULL, will store best alpha value found}
+#'   \item{best_lambda}{NULL, will store best lambda value found}
+#'   \item{debugArrays}{Empty list for debug information}
 initializeOptimizationVariables <- function() {
   list(
     AICc_values = NULL,
@@ -83,8 +128,32 @@ initializeOptimizationVariables <- function() {
   )
 }
 
-# Setup common parameters needed for optimization (AICc calculation)
-# Returns a list containing necessary parameters like Nobs, detS, grids, kernelFunction, etc.
+#' Sets up parameters for bandwidth optimization in kernel methods
+#' 
+#' @param X0 Matrix of initial points (nObs x 2)
+#' @param kernel.type Type of kernel function to use
+#' @param hOpt Whether to optimize bandwidth h
+#' @param nGridh Number of grid points for h optimization
+#' @param h Bandwidth parameter (if NULL and not optimizing, determined by method.h)
+#' @param method.h Method for bandwidth selection
+#' @param alphaOpt Whether to optimize alpha parameter for adaptive methods
+#' @param nGridAlpha Number of grid points for alpha optimization
+#' @param alpha Sensitivity parameter for adaptive bandwidth
+#' @param lambda Vector of local bandwidths (nObs, for adaptive methods)
+#' @param isAdaptive Whether using adaptive bandwidth estimation
+#' 
+#' @return A list containing all parameters needed for optimization:
+#'   \item{Nobs}{Number of observations}
+#'   \item{detS}{Determinant of covariance matrix}
+#'   \item{hGrid}{Grid of h values for optimization (nGridh)}
+#'   \item{kernelFunction}{Kernel function to use}
+#'   \item{nGridh_actual}{Actual number of h grid points}
+#'   \item{alphaGrid}{Grid of alpha values for optimization (nGridAlpha)}
+#'   \item{nGridAlpha_actual}{Actual number of alpha grid points}
+#'   \item{h}{Current h value}
+#'   \item{method.h}{Method used for h selection}
+#'   \item{alpha}{Current alpha value}
+#'   \item{isAdaptive}{Whether using adaptive bandwidth}
 setupOptimizationParameters <- function(X0, kernel.type,
                                         hOpt, nGridh, h = NULL, method.h = NULL,
                                         alphaOpt = FALSE, nGridAlpha = 5, alpha = NULL,
@@ -172,7 +241,25 @@ setupOptimizationParameters <- function(X0, kernel.type,
                alphaGrid, nGridAlpha_actual, h, method.h, alpha, isAdaptive))
 }
 
-# Consolidated AICc calculation function (without input validation)
+#' Calculates Akaike Information Criterion with correction (AICc) for model selection
+#' 
+#' @param X0 Matrix of initial points (nObs x 2)
+#' @param X1 Matrix of terminal points (nObs x 2)
+#' @param X1Hat Matrix of predicted terminal points (nObs x 2)
+#' @param lambda Vector of local bandwidths (nObs, for adaptive methods)
+#' @param Nobs Number of observations
+#' @param kernelFunction Kernel function used in estimation
+#' @param method Estimation method ("LL" or "NW")
+#' @param Hkk_values Hat matrix diagonal values (nObs, required for LL method)
+#' @param density Density estimates at evaluation points (nObs, required for NW method)
+#' @param h Bandwidth parameter (required for NW method)
+#' @param detS Determinant of covariance matrix (required for NW method)
+#' 
+#' @return A list containing:
+#'   \item{AICc}{Akaike Information Criterion with correction}
+#'   \item{RSS}{Residual sum of squares}
+#'   \item{trH}{Trace of hat matrix}
+#'   \item{freedom}{Effective degrees of freedom}
 calculateAICc <- function(X0, X1, X1Hat, lambda, Nobs, kernelFunction, method, 
                           Hkk_values = NULL, # Specific to LL
                           density = NULL, h = NULL, detS = NULL # Specific to NW

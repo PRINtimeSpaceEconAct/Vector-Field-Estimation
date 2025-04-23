@@ -1,3 +1,27 @@
+#' Performs Local Linear kernel regression
+#' 
+#' @param X Matrix of input points (nObs x 2)
+#' @param Y Vector of response values (nObs)
+#' @param x Matrix of evaluation points (nEval x 2, if NULL, X is used)
+#' @param nEval Number of evaluation points if x is NULL (default: 2500)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Distance matrix (nObs x nEval, if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param lambda Vector of local bandwidths for adaptive estimation (nEval)
+#' @param sparse Whether to use sparse matrices (default: FALSE)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: nrow(x))
+#' 
+#' @return A list containing the regression estimation results:
+#'   \item{estimator}{Estimated regression values (nEval)}
+#'   \item{x}{Evaluation points (nEval x 2)}
+#'   \item{density}{Density estimates at evaluation points (nEval)}
+#'   \item{Hkk_values}{Hat matrix diagonal values (nObs)}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{lambda}{Local bandwidths used (nObs), if applicable}
 LLregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                         method.h=NULL, h=NULL, lambda = NULL, 
                         sparse=FALSE, gc=FALSE, chunk_size=nrow(x)) {
@@ -10,7 +34,31 @@ LLregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     return(resultEst)
 }
 
-# Adaptive bandwidth version of LL regression
+#' Performs Local Linear regression with adaptive bandwidth
+#' 
+#' @param X Matrix of input points (nObs x 2)
+#' @param Y Vector of response values (nObs)
+#' @param x Matrix of evaluation points (nEval x 2, if NULL, X is used)
+#' @param nEval Number of evaluation points if x is NULL (default: 2500)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Distance matrix (nObs x nEval, if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param lambda Vector of local bandwidths (nEval, if NULL, computed internally)
+#' @param sparse Whether to use sparse matrices (default: FALSE)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: nrow(x))
+#' @param alpha Sensitivity parameter for adaptive bandwidth (default: 0.5)
+#' 
+#' @return A list containing the regression estimation results with adaptive bandwidths:
+#'   \item{estimator}{Estimated regression values (nEval)}
+#'   \item{x}{Evaluation points (nEval x 2)}
+#'   \item{density}{Density estimates at evaluation points (nEval)}
+#'   \item{Hkk_values}{Hat matrix diagonal values (nObs)}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{lambda}{Local bandwidths used (nObs)}
 LLregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                                 method.h=NULL, h=NULL, lambda=NULL,
                                 sparse=FALSE, gc=FALSE, chunk_size=nrow(x), alpha = 0.5) {
@@ -27,20 +75,48 @@ LLregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", 
     return(est)
 }
 
-# Helper function for core LL field component estimation
+#' Helper function for computing Local Linear vector field components
+#' 
+#' @param X0 Matrix of initial points (nObs x 2)
+#' @param Y1 Vector of x-component displacements (nObs)
+#' @param Y2 Vector of y-component displacements (nObs)
+#' @param x Matrix of evaluation points (nEval x 2)
+#' @param nEval Number of evaluation points
+#' @param kernel.type Type of kernel function to use
+#' @param D Distance matrix (nObs x nEval, if NULL, computed internally)
+#' @param method.h Method for bandwidth selection
+#' @param h Bandwidth parameter
+#' @param lambda Vector of local bandwidths for adaptive estimation (nEval)
+#' @param sparse Whether to use sparse matrices
+#' @param gc Whether to force garbage collection
+#' @param chunk_size Number of points to process at once
+#' 
+#' @return A list containing the vector field components and estimation parameters:
+#'   \item{estimator}{Matrix of vector field component estimates (nEval x 2)}
+#'   \item{x_eval}{Evaluation points (nEval x 2)}
+#'   \item{density}{Density estimates at evaluation points (nEval)}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{lambda}{Local bandwidths used (nObs), if applicable}
+#'   \item{Hkk_values}{Hat matrix diagonal values (nObs)}
 computeLLFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, 
                              method.h, h, lambda, sparse, gc, chunk_size) {
     
+    # Estimate x-component of the vector field
     est1 = LLregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D,
                       method.h=method.h, h=h, lambda=lambda,
                       sparse=sparse, gc=gc, chunk_size=chunk_size)
     
     # Use the evaluation points from the first estimate for the second
     x_eval = est1$x
+    
+    # Estimate y-component of the vector field
     est2 = LLregression(X0, Y2, x=x_eval, nEval=nEval, kernel.type=kernel.type, D=D,
                       method.h=method.h, h=h, lambda=lambda,
                       sparse=sparse, gc=gc, chunk_size=chunk_size)
     
+    # Combine the two components into a single estimator
     estimator = cbind(est1$estimator, est2$estimator)
     density = est1$density
     h = est1$h
@@ -48,11 +124,42 @@ computeLLFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D,
     kernel.type = est1$kernel.type
     lambda = est1$lambda
     Hkk_values = est1$Hkk_values # Get the full vector of Hkk values
+    
     # Return relevant components needed later
     return(listN(estimator, x_eval, density, h, method.h, kernel.type, lambda, Hkk_values))
 }
 
-
+#' Estimates a vector field using Local Linear kernel regression
+#' 
+#' @param X0 Matrix of initial points (nObs x 2)
+#' @param X1 Matrix of terminal points (nObs x 2)
+#' @param x Matrix of evaluation points (nEval x 2, if NULL, X0 is used)
+#' @param nEval Number of evaluation points if x is NULL (default: 2500)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Distance matrix (nObs x nEval, if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param lambda Vector of local bandwidths (not used in standard LL field)
+#' @param sparse Whether to use sparse matrices (default: FALSE)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: nrow(x))
+#' @param hOpt Whether to optimize the bandwidth parameter (default: FALSE)
+#' @param nGridh Number of grid points for bandwidth optimization (default: 10)
+#' 
+#' @return A list containing the vector field estimation results:
+#'   \item{x}{Evaluation points (nEval x 2)}
+#'   \item{X0}{Initial points (nObs x 2)}
+#'   \item{X1}{Terminal points (nObs x 2)}
+#'   \item{estimator}{Matrix of vector field estimates (nEval x 2)}
+#'   \item{type.est}{Estimation type ("LL")}
+#'   \item{density}{Density estimates at evaluation points (nEval)}
+#'   \item{Hkk_values}{Hat matrix diagonal values (nObs)}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{lambda}{Local bandwidths (NULL for non-adaptive estimation)}
+#'   \item{AICc_values}{AICc values from optimization (if hOpt=TRUE)}
+#'   \item{hGrid}{Grid of h values tested during optimization (if hOpt=TRUE)}
 LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                    method.h=NULL, h=NULL, lambda=NULL,
                    sparse=FALSE, gc=FALSE, chunk_size=nrow(x),
@@ -97,7 +204,7 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                 pb$update(i, formatOptimParams(h = hi))
             }
 
-            # Use full chunk_size? Check logic
+            # Compute field components for this bandwidth
             est_components_i = computeLLFieldComponents(X0, Y1, Y2, x=X0, nEval=optParams$Nobs,
                                                         kernel.type=kernel.type, D=D,
                                                         method.h=method.h, h=hi, lambda=NULL,
@@ -105,6 +212,7 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 
             X1Hat_i = X0 + est_components_i$estimator
 
+            # Calculate AICc for this bandwidth to evaluate model fit
             metrics_i = calculateAICc(X0=X0, X1=X1, X1Hat=X1Hat_i, 
                                           lambda=NULL, Nobs=optParams$Nobs,
                                           kernelFunction=optParams$kernelFunction,
@@ -112,12 +220,14 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
             
             optVars$AICc_values[i] = metrics_i$AICc
 
+            # Store debug information for this iteration
             optVars$debugArrays = debugStoreValues(optVars$debugArrays, i, NULL, # Use NULL for 1D
                                                   AICc=metrics_i$AICc,
                                                   RSS=metrics_i$RSS,
                                                   trH=metrics_i$trH,
                                                   freedom=metrics_i$freedom)
 
+            # Update best bandwidth if current one is better
             if (!is.na(metrics_i$AICc) && metrics_i$AICc < optVars$best_AICc) {
                 optVars$best_AICc = metrics_i$AICc
                 optVars$best_h = hi
@@ -129,6 +239,8 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         if (show_progress) { pb$close() }
 
         h = optVars$best_h # Update h with the best found value
+        
+        # Print optimization results
         printOptimizationResults(hGrid = optVars$hGrid,
                                  h = h,
                                  arrays = optVars$debugArrays,
@@ -164,6 +276,42 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     return(result)
 }
 
+#' Estimates a vector field using Local Linear kernel regression with adaptive bandwidth
+#' 
+#' @param X0 Matrix of initial points (nObs x 2)
+#' @param X1 Matrix of terminal points (nObs x 2)
+#' @param x Matrix of evaluation points (nEval x 2, if NULL, X0 is used)
+#' @param nEval Number of evaluation points if x is NULL (default: 2500)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Distance matrix (nObs x nEval, if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param lambda Vector of local bandwidths (nEval, if NULL, computed internally)
+#' @param sparse Whether to use sparse matrices (default: FALSE)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: nrow(x))
+#' @param alpha Sensitivity parameter for adaptive bandwidth (default: 0.5)
+#' @param hOpt Whether to optimize the bandwidth parameter (default: FALSE)
+#' @param nGridh Number of grid points for bandwidth optimization (default: 10)
+#' @param alphaOpt Whether to optimize the alpha parameter (default: FALSE)
+#' @param nGridAlpha Number of grid points for alpha optimization (default: 5)
+#' 
+#' @return A list containing the vector field estimation results with adaptive bandwidths:
+#'   \item{x}{Evaluation points (nEval x 2)}
+#'   \item{X0}{Initial points (nObs x 2)}
+#'   \item{X1}{Terminal points (nObs x 2)}
+#'   \item{estimator}{Matrix of vector field estimates (nEval x 2)}
+#'   \item{type.est}{Estimation type ("LL_adaptive")}
+#'   \item{density}{Density estimates at evaluation points (nEval)}
+#'   \item{Hkk_values}{Hat matrix diagonal values (nEval)}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{h}{Global bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{lambda}{Local bandwidths used (nEval)}
+#'   \item{alpha}{Alpha parameter used for adaptive bandwidth}
+#'   \item{AICc_values}{AICc values from optimization (if hOpt or alphaOpt is TRUE)}
+#'   \item{hGrid}{Grid of h values tested during optimization (if hOpt=TRUE)}
+#'   \item{alphaGrid}{Grid of alpha values tested during optimization (if alphaOpt=TRUE)}
 LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                            method.h=NULL, h=NULL, lambda=NULL,
                            sparse=FALSE, gc=FALSE, chunk_size=nrow(x), alpha = 0.5,
@@ -246,7 +394,7 @@ LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                     }
                 }
 
-                # Calculate lambda directly
+                # Calculate lambda for adaptive bandwidth estimation
                 lambda_ij = (pilotDensity$estimator / g)^(-alpha_j)
 
                 # Pass method.h=NULL here, h=hi is explicit
@@ -256,6 +404,8 @@ LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                                                              sparse=sparse, gc=gc, chunk_size=chunk_size)
                     
                 X1Hat_ij = X0 + est_components_ij$estimator
+                
+                # Calculate AICc for this combination of h and alpha
                 metrics_ij = calculateAICc(X0=X0, X1=X1, X1Hat=X1Hat_ij, 
                                                 lambda=lambda_ij, Nobs=optParams$Nobs,
                                                 kernelFunction=optParams$kernelFunction,
@@ -277,6 +427,7 @@ LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                                                        trH=metrics_ij$trH,
                                                        freedom=metrics_ij$freedom)
 
+                # Update best parameters if current combination is better
                 if (!is.na(metrics_ij$AICc) && metrics_ij$AICc < optVars$best_AICc) {
                     optVars$best_AICc = metrics_ij$AICc
                     optVars$best_h = hi

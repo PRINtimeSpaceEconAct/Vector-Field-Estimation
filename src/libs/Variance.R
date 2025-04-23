@@ -1,36 +1,59 @@
-significanceVF <- function(est,X0,X1,alpha = 0.05){
+#' Performs statistical significance testing for vector field estimations
+#' 
+#' @param est An object containing vector field estimation results
+#' @param p_crit Critical p-value threshold for significance testing (default: 0.05)
+#' 
+#' @return A list containing:
+#'   \item{Var}{Array of variance matrices for the estimations (2 x 2 x n, where n is number of evaluation points)}
+#'   \item{ChiSquare_stat}{Vector of chi-square test statistics (length n)}
+#'   \item{p_values}{Vector of p-values for the significance tests (length n)}
+#'   \item{signif}{Binary vector of significance indicators (1 = significant, 0 = not significant, length n)}
+significanceVF <- function(est,p_crit = 0.05){
     
-
+    # Extract parameters from the estimation object
     h = est$h
+    X0 = est$X0
+    X1 = est$X1
     
     n = nrow(X0)
     Y = X1-X0
     Yhat = interp2d(X0,est$x,est$estimator)
     eps = Y - Yhat    
     
-    # homoskedastic errors
+    # Calculate covariance matrix for homoskedastic errors
     Sigma = cov(eps, use = "complete.obs")
 
+    # Set kernel constant based on kernel type
     if (est$kernel.type == "epa"){ k = 3/5 
     } else if (est$kernel == "gauss") { k = 1/(2*sqrt(pi)) }
     
-    
+    # Initialize arrays for results
     Var = array(data = NA, dim = c(2,2,nrow(x)))
     ChiSquare_stat = rep(NA, nrow(x))     
     p_values = rep(NA, nrow(x))
     signif = rep(NA, nrow(x))
+    
+    # Calculate variance, chi-square statistic, and significance for each estimation point
     for (i in 1:nrow(x)){
         Var[,,i] = (k^2 * Sigma / (est$density[i] * n*h^2)) 
         ChiSquare_stat[i] = t(est$estimator[i,]) %*% solve(Var[,,i]) %*% est$estimator[i,]
         p_values[i] = 1-pchisq(ChiSquare_stat[i], 2)
         p_values[i] = ifelse( is.na(p_values[i]), 1 , p_values[i])
-        signif[i] = ifelse(p_values[i] < alpha, 1, 0)
+        signif[i] = ifelse(p_values[i] < p_crit, 1, 0)
     }
-    
     
     return(listN(Var,ChiSquare_stat,p_values,signif))
 }
 
+#' Performs bootstrap resampling to estimate errors in kernel-based vector field estimations
+#' 
+#' @param result An object containing vector field estimation results
+#' @param B Number of bootstrap replicates (default: 500)
+#' @param chunk_size Chunk size for processing (default: number of evaluation points)
+#' 
+#' @return A 3D array of bootstrapped field estimators with dimensions [nEval x 2 x B],
+#'         where nEval is the number of evaluation points, 2 is for x and y components,
+#'         and B is the number of bootstrap replicates
 bootstrapKernelFieldErrors <- function(result, B = 500, chunk_size = nrow(result$x)) {
     # 1. Extract common parameters from result
     X0 = result$X0
@@ -124,7 +147,35 @@ bootstrapKernelFieldErrors <- function(result, B = 500, chunk_size = nrow(result
     return(estimators_array)
 }
 
+#' Performs significance testing based on bootstrap samples for vector field estimations
+#' 
+#' @param result An object containing vector field estimation results
+#' @param bootstrapSamples Array of bootstrap samples from bootstrapKernelFieldErrors (nEval x 2 x B)
+#' @param p_crit Critical p-value threshold for significance testing (default: 0.05)
+#' 
+#' @return A logical vector indicating significance for each evaluation point (length nEval),
+#'         where TRUE means the point has a significant vector field direction
+significanceBootstrap <- function(result, bootstrapSamples, p_crit=0.05){
+   
+    nEval = nrow(result$x)
+    estConfInt = matrix(NA, nrow=nEval, ncol=2)
+    
+    # Identify where we can calculate directional vectors (non-zero and non-NaN values)
+    whereEst = (result$estimator[,1]!=0 & result$estimator[,2]!=0) & (!is.nan(result$estimator[,1]) & !is.nan(result$estimator[,2]))
+    whereEstInd = which(whereEst)
+    
+    # Calculate significance based on bootstrap distribution
+    estConfInt[whereEstInd,1] = sapply(whereEstInd, function(i) max(mean(bootstrapSamples[i,1,]<0,na.rm=T),mean(bootstrapSamples[i,1,]>0,na.rm=T)) )
+    estConfInt[whereEstInd,2] = sapply(whereEstInd, function(i) max(mean(bootstrapSamples[i,2,]<0,na.rm=T),mean(bootstrapSamples[i,2,]>0,na.rm=T)) )
 
+    # If all bootstrap samples are NA, set to non-significant
+    estConfInt[is.na(estConfInt)] = FALSE
+    
+    # Consider significant only if both components are significant
+    signifEst = rowSums(estConfInt>(1-p_crit))==ncol(result$x)
+    
+    return(signifEst) 
+}
 
 
 

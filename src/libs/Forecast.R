@@ -1,3 +1,12 @@
+#' Performs discrete-time forecasting using an estimated vector field
+#' 
+#' @param z Matrix of points to forecast (nPts x 2)
+#' @param estimatedVF List containing the estimated vector field (result from NWfield, LLfield, etc.)
+#' @param speedFactor Scaling factor for vector field strength (default: 1)
+#' @param nPeriods Number of time periods to forecast (default: 1)
+#' 
+#' @return If nPeriods == 1, a matrix of forecasted points (nPts x 2),
+#'         otherwise an array of forecasted points (nPts x 2 x nPeriods)
 forecastDiscrete <- function(z,estimatedVF,speedFactor=1,nPeriods=1){
     # z = points to forecast <- (nPts x 2)  
     # v = estimatedVF <- output of the function that estimate the VF

@@ -1,3 +1,25 @@
+#' Performs Nadaraya-Watson kernel regression
+#' 
+#' @param X Matrix of input points (n x d, where n is number of observations, d is dimension)
+#' @param Y Vector of response values (length n)
+#' @param x Matrix of evaluation points (if NULL, X is used)
+#' @param nEval Number of evaluation points if x is NULL (default: 2500)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Distance matrix (if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param lambda Vector of local bandwidths for adaptive estimation (length n)
+#' @param sparse Whether to use sparse matrices (default: FALSE)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: nrow(x))
+#' 
+#' @return A list containing the regression estimation results:
+#'   \item{x}{Matrix of evaluation points (m x d)}
+#'   \item{estimator}{Vector of estimated values at evaluation points (length m)}
+#'   \item{density}{Vector of density estimates at evaluation points (length m)}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{kernel.type}{Type of kernel function used}
 NWregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                         method.h=NULL, h=NULL, lambda = NULL, 
                         sparse=FALSE, gc=FALSE, chunk_size=nrow(x)) {
@@ -10,7 +32,30 @@ NWregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     return(resultEst)
 }
 
-# Adaptive bandwidth version of NW regression
+#' Performs Nadaraya-Watson regression with adaptive bandwidth
+#' 
+#' @param X Matrix of input points (n x d, where n is number of observations, d is dimension)
+#' @param Y Vector of response values (length n)
+#' @param x Matrix of evaluation points (if NULL, X is used)
+#' @param nEval Number of evaluation points if x is NULL (default: 2500)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Distance matrix (if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param lambda Vector of local bandwidths (if NULL, computed internally)
+#' @param sparse Whether to use sparse matrices (default: FALSE)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: nrow(x))
+#' @param alpha Sensitivity parameter for adaptive bandwidth (default: 0.5)
+#' 
+#' @return A list containing the regression estimation results with adaptive bandwidths:
+#'   \item{x}{Matrix of evaluation points (m x d)}
+#'   \item{estimator}{Vector of estimated values at evaluation points (length m)}
+#'   \item{density}{Vector of density estimates at evaluation points (length m)}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{lambda}{Vector of local bandwidths used (length n)}
 NWregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                                 method.h=NULL, h=NULL, lambda=NULL,
                                 sparse=FALSE, gc=FALSE, chunk_size=nrow(x), alpha = 0.5) {
@@ -27,31 +72,88 @@ NWregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", 
     return(est)
 }
 
-# Helper function for core NW field component estimation
+#' Helper function for computing Nadaraya-Watson vector field components
+#' 
+#' @param X0 Matrix of initial points (n x 2)
+#' @param Y1 Vector of x-component displacements (length n)
+#' @param Y2 Vector of y-component displacements (length n)
+#' @param x Matrix of evaluation points (m x 2)
+#' @param nEval Number of evaluation points
+#' @param kernel.type Type of kernel function to use
+#' @param D Distance matrix (if NULL, computed internally)
+#' @param method.h Method for bandwidth selection
+#' @param h Bandwidth parameter
+#' @param lambda Vector of local bandwidths for adaptive estimation (length n)
+#' @param sparse Whether to use sparse matrices
+#' @param gc Whether to force garbage collection
+#' @param chunk_size Number of points to process at once
+#' 
+#' @return A list containing the vector field components and estimation parameters:
+#'   \item{estimator}{Matrix of vector field estimates (m x 2)}
+#'   \item{x_eval}{Matrix of evaluation points (m x 2)}
+#'   \item{density}{Vector of density estimates at evaluation points (length m)}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{lambda}{Vector of local bandwidths used (length n)}
 computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, 
                              method.h, h, lambda, sparse, gc, chunk_size) {
     
+    # Estimate x-component of the vector field
     est1 = NWregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D,
                       method.h=method.h, h=h, lambda=lambda,
                       sparse=sparse, gc=gc, chunk_size=chunk_size)
     
     # Use the evaluation points from the first estimate for the second
     x_eval = est1$x
+    
+    # Estimate y-component of the vector field
     est2 = NWregression(X0, Y2, x=x_eval, nEval=nEval, kernel.type=kernel.type, D=D,
                       method.h=method.h, h=h, lambda=lambda,
                       sparse=sparse, gc=gc, chunk_size=chunk_size)
     
+    # Combine the two components into a single estimator
     estimator = cbind(est1$estimator, est2$estimator)
     density = est1$density
     h = est1$h
     method.h = est1$method.h
     kernel.type = est1$kernel.type
     lambda = est1$lambda
-    # Return relevant components needed later
     
+    # Return relevant components needed later
     return(listN(estimator, x_eval, density, h, method.h, kernel.type, lambda))
 }
 
+#' Estimates a vector field using Nadaraya-Watson kernel regression
+#' 
+#' @param X0 Matrix of initial points (n x 2)
+#' @param X1 Matrix of terminal points (n x 2)
+#' @param x Matrix of evaluation points (if NULL, X0 is used)
+#' @param nEval Number of evaluation points if x is NULL (default: 2500)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Distance matrix (if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param lambda Vector of local bandwidths (not used in standard NW field)
+#' @param sparse Whether to use sparse matrices (default: FALSE)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: nrow(x))
+#' @param hOpt Whether to optimize the bandwidth parameter (default: FALSE)
+#' @param nGridh Number of grid points for bandwidth optimization (default: 10)
+#' 
+#' @return A list containing the vector field estimation results:
+#'   \item{x}{Matrix of evaluation points (m x 2)}
+#'   \item{X0}{Matrix of initial points (n x 2)}
+#'   \item{X1}{Matrix of terminal points (n x 2)}
+#'   \item{estimator}{Matrix of vector field estimates (m x 2)}
+#'   \item{type.est}{Type of estimation ("NW")}
+#'   \item{density}{Vector of density estimates at evaluation points (length m)}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{lambda}{NULL (not used in standard NW field)}
+#'   \item{AICc_values}{Vector of AICc values for different bandwidths (only if hOpt=TRUE)}
+#'   \item{hGrid}{Vector of bandwidth values used for optimization (only if hOpt=TRUE)}
 NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                     method.h=NULL, h=NULL, lambda=NULL,
                     sparse=FALSE, gc=FALSE, chunk_size=nrow(x),
@@ -104,6 +206,7 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 
             X1Hat_i = X0 + est_components_i$estimator
 
+            # Calculate AICc for this bandwidth to evaluate model fit
             metrics_i = calculateAICc(X0=X0, X1=X1, X1Hat=X1Hat_i, 
                                           lambda=NULL, Nobs=optParams$Nobs,
                                           kernelFunction=optParams$kernelFunction,
@@ -113,12 +216,14 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 
             optVars$AICc_values[i] = metrics_i$AICc
 
+            # Store debug information for this iteration
             optVars$debugArrays = debugStoreValues(optVars$debugArrays, i, NULL, # Use NULL for 1D
                                                   AICc=metrics_i$AICc,
                                                   RSS=metrics_i$RSS,
                                                   trH=metrics_i$trH,
                                                   freedom=metrics_i$freedom)
 
+            # Update best bandwidth if current one is better
             if (!is.na(metrics_i$AICc) && metrics_i$AICc < optVars$best_AICc) {
                 optVars$best_AICc = metrics_i$AICc
                 optVars$best_h = hi
@@ -130,6 +235,8 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         if (show_progress) { pb$close() }
 
         h = optVars$best_h # Update h with the best found value
+        
+        # Print optimization results
         printOptimizationResults(hGrid = optVars$hGrid,
                                  h = h,
                                  arrays = optVars$debugArrays,
@@ -164,6 +271,41 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     return(result)
 }
 
+#' Estimates a vector field using Nadaraya-Watson kernel regression with adaptive bandwidth
+#' 
+#' @param X0 Matrix of initial points (n x 2)
+#' @param X1 Matrix of terminal points (n x 2)
+#' @param x Matrix of evaluation points (if NULL, X0 is used)
+#' @param nEval Number of evaluation points if x is NULL (default: 2500)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Distance matrix (if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param lambda Vector of local bandwidths (if NULL, computed internally) (length n)
+#' @param sparse Whether to use sparse matrices (default: FALSE)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: nrow(x))
+#' @param alpha Sensitivity parameter for adaptive bandwidth (default: 0.5)
+#' @param hOpt Whether to optimize the bandwidth parameter (default: FALSE)
+#' @param nGridh Number of grid points for bandwidth optimization (default: 10)
+#' @param alphaOpt Whether to optimize the alpha parameter (default: FALSE)
+#' @param nGridAlpha Number of grid points for alpha optimization (default: 5)
+#' 
+#' @return A list containing the vector field estimation results with adaptive bandwidths:
+#'   \item{x}{Matrix of evaluation points (m x 2)}
+#'   \item{X0}{Matrix of initial points (n x 2)}
+#'   \item{X1}{Matrix of terminal points (n x 2)}
+#'   \item{estimator}{Matrix of vector field estimates (m x 2)}
+#'   \item{type.est}{Type of estimation ("NW_adaptive")}
+#'   \item{density}{Vector of density estimates at evaluation points (length m)}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{lambda}{Vector of local bandwidths used (length n)}
+#'   \item{alpha}{Sensitivity parameter for adaptive bandwidth}
+#'   \item{AICc_values}{Array of AICc values for different parameter combinations (only if optimization was performed)}
+#'   \item{hGrid}{Vector of bandwidth values used for optimization (only if hOpt=TRUE)}
+#'   \item{alphaGrid}{Vector of alpha values used for optimization (only if alphaOpt=TRUE)}
 NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                             method.h=NULL, h=NULL, lambda=NULL,
                             sparse=FALSE, gc=FALSE, chunk_size=nrow(x), alpha = 0.5,
@@ -246,7 +388,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                     }
                 }
 
-                # Calculate lambda directly
+                # Calculate lambda for adaptive bandwidth estimation
                 lambda_ij = (pilotDensity$estimator / g)^(-alpha_j)
 
                 # Pass method.h=NULL here, h=hi is explicit
@@ -256,6 +398,8 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                                                              sparse=sparse, gc=gc, chunk_size=chunk_size)
                     
                 X1Hat_ij = X0 + est_components_ij$estimator
+                
+                # Calculate AICc for this combination of h and alpha
                 metrics_ij = calculateAICc(X0=X0, X1=X1, X1Hat=X1Hat_ij, 
                                                 lambda=lambda_ij, Nobs=optParams$Nobs,
                                                 kernelFunction=optParams$kernelFunction,
@@ -279,6 +423,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                                                        trH=metrics_ij$trH,
                                                        freedom=metrics_ij$freedom)
 
+                # Update best parameters if current combination is better
                 if (!is.na(metrics_ij$AICc) && metrics_ij$AICc < optVars$best_AICc) {
                     optVars$best_AICc = metrics_ij$AICc
                     optVars$best_h = hi
@@ -319,11 +464,6 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
     # Final estimation using the chosen/optimized parameters
     final_x = if (is.null(x)) X0 else x
     final_chunk_size = if (is.null(x)) nrow(X0) else chunk_size
-
-    # Ensure current_h is valid before proceeding (redundant check now, done after loop)
-    # if (is.null(current_h)) {
-    #     stop("Error: Optimal h could not be determined.")
-    # }
 
     # Pass method.h=NULL as h is fixed
     final_est_components = computeNWFieldComponents(X0, Y1, Y2, x=final_x, nEval=nEval,
