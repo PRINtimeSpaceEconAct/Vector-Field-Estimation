@@ -1,7 +1,7 @@
 # Clear workspace and load dependencies
 setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
 rm(list = ls())
-DEBUG = TRUE
+DEBUG = FALSE
 source("src/libs/loadLib.R")
 library(fields)
 library(latex2exp)
@@ -53,7 +53,7 @@ t0 = Sys.time()
 # est_field_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
 #                                      chunk_size=3000,
 #                                      sparse=FALSE, gc=TRUE, hOpt = TRUE, alphaOpt = TRUE)
-est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = "silverman",
+est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
                                      chunk_size=1000,
                                      sparse=FALSE, gc=TRUE, 
                                      hOpt = TRUE, alphaOpt = TRUE)
@@ -67,22 +67,23 @@ t = Sys.time() - t0
 
 # plot ----
 # plot campo vero ----
-dev.new()
-op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times"
-VFx = t(apply(x, 1, VF))
-plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
-arrows(x[,1],x[,2],x[,1]+VFx[,1],x[,2]+VFx[,2],angle=15,col="blue",length=0.05)
-abline(h=0)
-abline(v=0)
-dev.copy2pdf(file="testPics/doubleWellcampoVero.pdf")
-par(op)
+# dev.new()
+# op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times"
+# VFx = t(apply(x, 1, VF))
+# lengthArrows=0.1
+# plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
+# arrows(x[,1],x[,2],x[,1]+lengthArrows*VFx[,1],x[,2]+lengthArrows*VFx[,2],angle=15,col="black",length=0.05)
+# abline(h=0)
+# abline(v=0)
+# dev.copy2pdf(file="testPics/doubleWellcampoVero.pdf")
+# par(op)
 
 ## plot campo stimato ----
 dev.new()
 op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times" 
 signifVFest = significanceVF(est_field_adaptive)
 lengthArrows=0.1
-plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
+plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "Tutte frecce")
 arrows(est_field_adaptive$x[,1], est_field_adaptive$x[,2],
        est_field_adaptive$x[,1] + lengthArrows*est_field_adaptive$estimator[,1], 
        est_field_adaptive$x[,2] + lengthArrows*est_field_adaptive$estimator[,2],
@@ -97,7 +98,7 @@ signifInd = which(signifBoot)
 dev.new()
 op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times" 
 lengthArrows=0.1
-plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
+plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "Solo significative")
 arrows(est_field_adaptive$x[signifInd,1], est_field_adaptive$x[signifInd,2],
        est_field_adaptive$x[signifInd,1] + lengthArrows*est_field_adaptive$estimator[signifInd,1], 
        est_field_adaptive$x[signifInd,2] + lengthArrows*est_field_adaptive$estimator[signifInd,2],

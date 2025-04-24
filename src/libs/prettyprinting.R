@@ -27,7 +27,7 @@ debugInitArrays <- function(dim1, dim2 = NULL) {
       # 1D arrays
       result <- list(
         AICc = array(NA, dim = dim1),
-        RSS = array(NA, dim = dim1),
+        CovDet = array(NA, dim = dim1),
         trH = array(NA, dim = dim1),
         freedom = array(NA, dim = dim1)
       )
@@ -35,7 +35,7 @@ debugInitArrays <- function(dim1, dim2 = NULL) {
       # 2D arrays
       result <- list(
         AICc = array(NA, dim = c(dim1, dim2)),
-        RSS = array(NA, dim = c(dim1, dim2)),
+        CovDet = array(NA, dim = c(dim1, dim2)),
         trH = array(NA, dim = c(dim1, dim2)),
         freedom = array(NA, dim = c(dim1, dim2))
       )
@@ -53,23 +53,23 @@ debugInitArrays <- function(dim1, dim2 = NULL) {
 #' @param i First index (h index)
 #' @param j Second index (alpha index, if applicable)
 #' @param AICc AICc value to store
-#' @param RSS RSS value to store
+#' @param CovDet CovDet value to store
 #' @param trH Trace of hat matrix value to store
 #' @param freedom Degrees of freedom value to store
 #' 
 #' @return Updated arrays with new values stored
-debugStoreValues <- function(arrays, i, j = NULL, AICc = NA, RSS = NA, trH = NA, freedom = NA) {
+debugStoreValues <- function(arrays, i, j = NULL, AICc = NA, CovDet = NA, trH = NA, freedom = NA) {
   if (exists("DEBUG") && DEBUG && length(arrays) > 0) {
     if (is.null(j)) {
       # 1D case
       if (!is.na(AICc)) arrays$AICc[i] <- AICc
-      if (!is.na(RSS)) arrays$RSS[i] <- RSS
+      if (!is.na(CovDet)) arrays$CovDet[i] <- CovDet
       if (!is.na(trH)) arrays$trH[i] <- trH
       if (!is.na(freedom)) arrays$freedom[i] <- freedom
     } else {
       # 2D case
       if (!is.na(AICc)) arrays$AICc[i,j] <- AICc
-      if (!is.na(RSS)) arrays$RSS[i,j] <- RSS
+      if (!is.na(CovDet)) arrays$CovDet[i,j] <- CovDet
       if (!is.na(trH)) arrays$trH[i,j] <- trH
       if (!is.na(freedom)) arrays$freedom[i,j] <- freedom
     }
@@ -81,7 +81,7 @@ debugStoreValues <- function(arrays, i, j = NULL, AICc = NA, RSS = NA, trH = NA,
 #' 
 #' @param hGrid Vector of h values used in optimization
 #' @param h Optimal h value
-#' @param arrays List of arrays containing debug information (AICc, RSS, trH, freedom)
+#' @param arrays List of arrays containing debug information (AICc, CovDet, trH, freedom)
 #' @param alpha Optimal alpha value (if applicable)
 #' @param alphaGrid Vector of alpha values used in optimization (if applicable)
 printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alphaGrid = NULL) {
@@ -131,8 +131,8 @@ printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alph
       cat("\n")
     }
     
-    # Print log(RSS) matrix
-    cat("\nlog(RSS) values for all h and alpha combinations:\n")
+    # Print log(CovDet) matrix
+    cat("\nlog(CovDet) values for all h and alpha combinations:\n")
     cat("      ") # Space for row labels
     for (j in 1:length(alphaGrid)) {
       cat(sprintf("alpha=%.2f ", alphaGrid[j]))
@@ -142,7 +142,7 @@ printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alph
     for (i in 1:length(hGrid)) {
       cat(sprintf("h=%.2f ", hGrid[i]))
       for (j in 1:length(alphaGrid)) {
-        cat(sprintf("%.2f     ", log(arrays$RSS[i,j])))
+        cat(sprintf("%.2f     ", log(arrays$CovDet[i,j])))
       }
       cat("\n")
     }
@@ -172,7 +172,7 @@ printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alph
     
     # For 1D arrays (when alphaOpt is FALSE), print in tabular format
     cat("\nValues for all h", ifelse(!is.null(alpha), paste(" with fixed alpha=", format(alpha, digits=2, nsmall=2), ":", sep=""), ":"), "\n")
-    cat(sprintf("%-10s %-10s %-10s %-10s %-10s\n", "h", "trH", "freedom", "log(RSS)", "AICc"))
+    cat(sprintf("%-10s %-10s %-10s %-10s %-10s\n", "h", "trH", "freedom", "log(CovDet)", "AICc"))
     cat(sprintf("%-10s %-10s %-10s %-10s %-10s\n", "----------", "----------", "----------", "----------", "----------"))
     
     # Print each row
@@ -181,7 +181,7 @@ printOptimizationResults <- function(hGrid, h, arrays = NULL, alpha = NULL, alph
                   hGrid[i], 
                   ifelse(is.null(arrays$trH), NA, arrays$trH[i]), 
                   ifelse(is.null(arrays$freedom), NA, arrays$freedom[i]), 
-                  ifelse(is.null(arrays$RSS), NA, log(arrays$RSS[i])), 
+                  ifelse(is.null(arrays$CovDet), NA, log(arrays$CovDet[i])), 
                   ifelse(is.null(arrays$AICc), NA, arrays$AICc[i])))
     }
     

@@ -55,9 +55,9 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 
 VFx = t(apply(x, 1, VF))
 # stima ----
-est_field_LL_opt = LLfield(X0, X1, x=X0 , kernel.type="gauss", method.h = NULL,
-                        chunk_size=1000,
-                        sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, nGridh = 5)
+# est_field_LL_opt = LLfield(X0, X1, x=X0 , kernel.type="gauss", method.h = NULL,
+#                         chunk_size=1000,
+#                         sparse=FALSE, gc=TRUE, hOpt = TRUE, h = NULL, nGridh = 5)
 
 
 est_field_LL_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="gauss",method.h = NULL,

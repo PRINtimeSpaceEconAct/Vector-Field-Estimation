@@ -223,7 +223,7 @@ LLfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
             # Store debug information for this iteration
             optVars$debugArrays = debugStoreValues(optVars$debugArrays, i, NULL, # Use NULL for 1D
                                                   AICc=metrics_i$AICc,
-                                                  RSS=metrics_i$RSS,
+                                                  CovDet=metrics_i$CovDet,
                                                   trH=metrics_i$trH,
                                                   freedom=metrics_i$freedom)
 
@@ -423,7 +423,7 @@ LLfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
 
                  optVars$debugArrays = debugStoreValues(optVars$debugArrays, aic_index_1, aic_index_2,
                                                        AICc=metrics_ij$AICc,
-                                                       RSS=metrics_ij$RSS,
+                                                       CovDet=metrics_ij$CovDet,
                                                        trH=metrics_ij$trH,
                                                        freedom=metrics_ij$freedom)
 

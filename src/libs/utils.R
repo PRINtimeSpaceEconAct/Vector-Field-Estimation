@@ -257,7 +257,7 @@ setupOptimizationParameters <- function(X0, kernel.type,
 #' 
 #' @return A list containing:
 #'   \item{AICc}{Akaike Information Criterion with correction}
-#'   \item{RSS}{Residual sum of squares}
+#'   \item{CovDet}{Determinant of the covariance matrix of residuals}
 #'   \item{trH}{Trace of hat matrix}
 #'   \item{freedom}{Effective degrees of freedom}
 calculateAICc <- function(X0, X1, X1Hat, lambda, Nobs, kernelFunction, method, 
@@ -266,49 +266,49 @@ calculateAICc <- function(X0, X1, X1Hat, lambda, Nobs, kernelFunction, method,
                           ) {
     
     # Initialize return values for potential early exit during calculation errors
-    error_result <- listN(AICc = Inf, RSS = NA, trH = NA, freedom = NA)
+    error_result <- listN(AICc = Inf, CovDet = NA, trH = NA, freedom = NA)
 
     # --- Calculate tr(H) based on method ---
     trH = NA # Initialize
     if (method == "LL") {
         if (is.null(lambda)) {
             # Original LL formula
-            trH = kernelFunction(0, 0) * sum(Hkk_values, na.rm = TRUE)
+            trH = min( kernelFunction(0, 0) * sum(Hkk_values, na.rm = TRUE)/sum(!is.nan(Hkk_values))*Nobs ,Nobs-2)
         } else {
             # Adaptive LL formula 
-            trH = kernelFunction(0, 0) * sum( Hkk_values / (lambda^2) , na.rm = TRUE)
+            trH = min(kernelFunction(0, 0) * sum( Hkk_values / (lambda^2) , na.rm = TRUE)/sum(!is.nan(Hkk_values))*Nobs,Nobs-2)
         }
     } else if (method == "NW") {
        if (is.null(lambda)) {
             # Original NW formula
-            trH = (kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum(1 / density, na.rm = TRUE)
+            trH = min((kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum(1 / density, na.rm = TRUE) / sum(!is.nan(density))*Nobs,Nobs-2)
         } else {
             # Adaptive NW formula
-            trH = (kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum((1 / lambda^2) * (1 / density), na.rm = TRUE)
+            trH = min((kernelFunction(0, 0) / (h^2 * Nobs * sqrt(detS))) * sum((1 / lambda^2) * (1 / density), na.rm = TRUE) / sum(!is.nan(density))*Nobs,Nobs-2)
        }
     } 
 
     # --- Calculate degrees of freedom and AICc (common part) ---
     # Use complete.obs for robustness if X1Hat or X1 have NAs
-    RSS = det(cov(X1Hat - X1, use="complete.obs")) 
+    CovDet = det(cov(X1Hat - X1, use="complete.obs")) 
 
     # Ensure denominator is not zero or negative
-    denominator = (1 - (2 * trH + 2) / (2 * Nobs)) 
+    denominator = 1 - (2 * trH + 2) / (2 * Nobs)
     
     # Check for invalid calculation results (trH, denominator)
-    if (is.na(trH) || is.nan(trH) || is.na(denominator) || is.nan(denominator) || denominator <= 1e-9 || is.na(RSS) || is.nan(RSS)) {
+    if (is.na(trH) || is.nan(trH) || is.na(denominator) || is.nan(denominator) || denominator <= 1e-9 || is.na(CovDet) || is.nan(CovDet)) {
         freedom = Inf
         AICc = Inf
     } else {
        freedom = (1 + (2 * trH) / (2 * Nobs)) / denominator
-       AICc = log(RSS) + freedom
+       AICc = log(CovDet) + freedom
     }
     
     # Check for NaN/Inf results after calculation
     if(is.nan(AICc) || is.infinite(AICc)) AICc <- Inf
     if(is.nan(freedom) || is.infinite(freedom)) freedom <- Inf
 
-    return(listN(AICc, RSS, trH, freedom))
+    return(listN(AICc, CovDet, trH, freedom))
 }
 
 
