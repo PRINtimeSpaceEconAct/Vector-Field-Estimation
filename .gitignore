@@ -9,3 +9,4 @@ datasets/.Rapp.history
 *.pdf
 *.eps
 
+.Rproj.user

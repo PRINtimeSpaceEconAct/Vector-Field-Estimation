@@ -311,4 +311,3 @@ calculateAICc <- function(X0, X1, X1Hat, lambda, Nobs, kernelFunction, method,
     return(listN(AICc, CovDet, trH, freedom))
 }
 
-
