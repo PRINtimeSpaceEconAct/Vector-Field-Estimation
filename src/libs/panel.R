@@ -4,10 +4,91 @@
 #' @param nEval_chunk The number of evaluation points.
 #' @return A list containing the weights `omega_a`, `omega_b`, and `omega_c`.
 #' @export
-compute_weights <- function(X, nEval_chunk) {
-    # This is a placeholder for the actual weight computation.
-    # The actual implementation will be provided later.
-    stop("compute_weights is not implemented yet.")
+compute_weights <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
+                             method.h=NULL, h=NULL, lambda=NULL,
+                             sparse=FALSE, gc=FALSE, chunk_size=NULL){    
+    dims = dim(X)
+    nObs = dims[1]
+    nT = dims[3]
+    X_unrolled = aperm(X, c(1, 3, 2))
+    dim(X_unrolled) = c(nObs * nT, 2)
+    nTotalObs = nObs * nT
+
+    covX = cov(X_unrolled)
+    invS = solve(covX)
+    sqrtinvS = expm::sqrtm(solve(covX))
+    detS = det(covX)
+    
+    Z = X_unrolled %*% sqrtinvS
+    
+    if (is.null(x)) { x = defineEvalPoints(X_unrolled,nEval) }
+    nEval =  nrow(x)
+    z = x %*% sqrtinvS
+
+    if (DEBUG) {
+        print(paste("nEval: ",nEval))
+        print(paste("nObs: ",nObs))
+        print(paste("nT: ",nT))
+    }
+    if (is.null(chunk_size)) { chunk_size = nEval }
+    if (is.null(lambda)) { lambda = rep(1, nTotalObs) }
+    
+    if (is.null(h) | is.null(method.h)) { 
+        list.h = define_h_method.h(Z,h,method.h, kernel.type)
+        h = list.h$h
+        method.h = list.h$method.h 
+    }
+    kernelFunction = defineKernel(kernel.type)
+    
+    omega_a <- array(NA, dim = c(nObs, nT, nEval))
+    omega_b <- array(NA, dim = c(nObs, nT, nEval))
+    omega_c <- array(NA, dim = c(nObs, nT, nEval))
+
+    chunks = split(seq_len(nEval), ceiling(seq_len(nEval)/chunk_size))
+    
+    if (DEBUG) {
+        print(paste("Computing ",length(chunks)," chunks"))
+        print(paste("Chunk size: ",chunk_size)) 
+    }
+    
+    # start estimate
+    for(i in 1:length(chunks)) {
+        if (DEBUG) print(paste("Computing chunk ",i,"/",length(chunks),sep=""))
+        
+        chunk = chunks[[i]]
+        current_chunk_size = length(chunk)
+        z_chunk = z[chunk, ,drop=FALSE]
+        
+        if (is.null(D)){ 
+            D_chunk = computeDcomponents(Z, z_chunk, sparse=sparse) 
+        } else { 
+            D_chunk = list(z1=D$z1[,chunk], z2=D$z2[,chunk]) 
+        }
+        
+        # Kernel computation
+        K = kernelFunction(sweep(D_chunk$z1, 1, h * lambda, "/"),sweep(D_chunk$z2, 1, h * lambda, "/"))
+        
+        dim(K) <- c(nObs, nT, current_chunk_size)
+
+        # Compute denominators
+        denom_a <- apply(K, c(1, 3), sum, na.rm = TRUE)
+        denom_b <- apply(K, c(2, 3), sum, na.rm = TRUE)
+        denom_c <- apply(K, 3, sum, na.rm = TRUE)
+        
+        # To prevent division by zero
+        denom_a[denom_a == 0] <- 1
+        denom_b[denom_b == 0] <- 1
+        denom_c[denom_c == 0] <- 1
+
+        # Compute weights for the chunk
+        omega_a[,,chunk] <- sweep(K, c(1, 3), denom_a, "/")
+        omega_b[,,chunk] <- sweep(K, c(2, 3), denom_b, "/")
+        omega_c[,,chunk] <- sweep(K, 3, denom_c, "/")
+
+        if (gc == TRUE){ gc() }
+    }
+
+    return(listN(omega_a, omega_b, omega_c))
 }
 
 #' Applies the FE/TE transformations to a given dataset
@@ -100,7 +181,16 @@ within_transform <- function(X,
                              FE = FALSE,
                              TE = FALSE,
                              uniform_weights = TRUE,
-                             nEval_chunk = 1000) {
+                             nEval_chunk = 1000,
+                             x = NULL,
+                             kernel.type = "gauss",
+                             D = NULL,
+                             method.h = NULL,
+                             h = NULL,
+                             lambda = NULL,
+                             sparse = FALSE,
+                             gc = FALSE,
+                             chunk_size = NULL) {
 
     dims <- dim(X)
     if (length(dims) != 3 || dims[2] != 2) {
@@ -118,7 +208,17 @@ within_transform <- function(X,
         omega_b_X <- array(1/nObs, dim = c(nObs, nT, nEval_chunk))
         omega_c_X <- array(1/(nObs * nT), dim = c(nObs, nT, nEval_chunk))
     } else {
-        weights_X <- compute_weights(X, nEval_chunk)
+        weights_X <- compute_weights(X = X,
+                                     x = x,
+                                     nEval = nEval_chunk,
+                                     kernel.type = kernel.type,
+                                     D = D,
+                                     method.h = method.h,
+                                     h = h,
+                                     lambda = lambda,
+                                     sparse = sparse,
+                                     gc = gc,
+                                     chunk_size = chunk_size)
         omega_a_X <- weights_X$omega_a
         omega_b_X <- weights_X$omega_b
         omega_c_X <- weights_X$omega_c
@@ -135,8 +235,18 @@ within_transform <- function(X,
         omega_b_Y <- array(1/nObs, dim = c(nObs, nT_Y, nEval_chunk))
         omega_c_Y <- array(1/(nObs * nT_Y), dim = c(nObs, nT_Y, nEval_chunk))
     } else {
-        # Assuming compute_weights can handle data with different nT
-        weights_Y <- compute_weights(Y, nEval_chunk)
+        # For Y, we reset data-dependent parameters
+        weights_Y <- compute_weights(X = Y,
+                                     x = NULL,
+                                     nEval = nEval_chunk,
+                                     kernel.type = kernel.type,
+                                     D = NULL,
+                                     method.h = method.h,
+                                     h = NULL,
+                                     lambda = NULL,
+                                     sparse = sparse,
+                                     gc = gc,
+                                     chunk_size = chunk_size)
         omega_a_Y <- weights_Y$omega_a
         omega_b_Y <- weights_Y$omega_b
         omega_c_Y <- weights_Y$omega_c
@@ -206,6 +316,7 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
         if (DEBUG) print(paste("Computing chunk ",i,"/",length(chunks),sep=""))
         
         chunk = chunks[[i]]
+        current_chunk_size = length(chunk)
         z_chunk = z[chunk, ,drop=FALSE]
         
         if (is.null(D)){ D_chunk = computeDcomponents(Z, z_chunk, sparse=sparse) 
@@ -231,7 +342,7 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
         T2 = colSums(K_scaledY * d2)
     
         # MDenominator[,,k] is the S_k matrix for the k-th observation IN THE CHUNK
-        MDenominator = array(NA,dim=c(2,2,chunk_size))
+        MDenominator = array(NA,dim=c(2,2,current_chunk_size))
         MDenominator[1,1,] = S11
         MDenominator[1,2,] = S12
         MDenominator[2,1,] = S12
@@ -239,13 +350,13 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
         
         # Keep calculation for solutions (estimator)
         bConstant = rbind(T1,T2)
-        solve_system <- function(k) { # k is index within chunk (1 to nEval_chunk)
+        solve_system <- function(k) { # k is index within chunk (1 to current_chunk_size)
             if ( det(MDenominator[,,k]) == 0 ) {
                 return(rep(NaN,2))
             }
             return(as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k]))
         }
-        solutions <- matrix(unlist(purrr::map(1:chunk_size, ~ solve_system(.x))),
+        solutions <- matrix(unlist(purrr::map(1:current_chunk_size, ~ solve_system(.x))),
                             nrow=2,byrow = FALSE)
 
         estimator[chunk, ] <- t(solutions)

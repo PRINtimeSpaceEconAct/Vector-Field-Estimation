@@ -1,9 +1,10 @@
 rm(list = ls())
+setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
 source("src/libs/loadLib.R")
 DEBUG = TRUE
 
 # parameters ----
-nObs = 200
+nObs = 1000
 nT = 10
 nEval = 1024
 
@@ -20,21 +21,33 @@ gamma_t = mvrnorm(nT,mu=c(0,0),Sigma=0.01*diag(2))
 gamma_t[,1] = gamma_t[,1] - sum(gamma_t[,1])/nT
 gamma_t[,2] = gamma_t[,2] - sum(gamma_t[,2])/nT
 
-X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 0.25*diag(2)) + alpha_i + array(rep(gamma_t[1,],each=nObs),dim=c(nObs,2))
+X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 0.25*diag(2)) #+ alpha_i + array(rep(gamma_t[1,],each=nObs),dim=c(nObs,2))
 X = array(NA,dim = c(nObs,2,nT+1))
 X[,,1] = X0
 
 # example 1 - double well ----
-# VF <- function(X){
-#     # X = (x,y)
-#     # U(X) = x^4 - x^2 + y^2
-#     # VF(X) = -grad U(X) = -(4x^3 - 2x, 2y)
-#     return( -0.01*c(4*X[1]^3 - 2*X[1], 2*X[2]) )
-# }
-
 VF <- function(X){
-    return( -0.9*c(X[1], X[2]) )
+    # X = (x,y)
+    # U(X) = x^4 - x^2 + y^2
+    # VF(X) = -grad U(X) = -(4x^3 - 2x, 2y)
+    return( -0.01*c(4*X[1]^3 - 2*X[1], 2*X[2]) )
 }
+
+
+JVF1 <- function(X){
+    # X = (x,y)
+    # U(X) = x^4 - x^2 + y^2
+    # VF(X) = -grad U(X) = -(4x^3 - 2x, 2y)
+    return( -0.01*c(12*X[1]^2 - 2, 0) )
+}
+
+JVF2 <- function(X){
+    # X = (x,y)
+    # U(X) = x^4 - x^2 + y^2
+    # VF(X) = -grad U(X) = -(4x^3 - 2x, 2y)
+    return( c(0, 2) )
+}
+
 
 # example 2 -- single well ----
 # VF <- function(X){
@@ -53,13 +66,13 @@ VF <- function(X){
 
 
 for (t in 1:nT){
-    X[,,t+1] = X[,,t] + t(apply(X[,,t], 1, VF)) + alpha_i + array(rep(gamma_t[t,],each=nObs),dim=c(nObs,2)) + 
+    X[,,t+1] = X[,,t] + t(apply(X[,,t], 1, VF)) #+ alpha_i + array(rep(gamma_t[t,],each=nObs),dim=c(nObs,2)) + 
         + mvrnorm(nObs, mu=c(0,0),Sigma = 0.001*diag(2))
 }
 # plot a scatter plot of X at all time points
 plot(X[,1,1], X[,2,1], type="p", col="red", pch=16,
      xlab="x", ylab="y", main="Scatter Plot of X")
-plot(X[,1,10], X[,2,10], type="p", col="blue", pch=16,
+points(X[,1,10], X[,2,10], type="p", col="blue", pch=16,
      xlab="x", ylab="y", main="Scatter Plot of X")
 
 # eval points
@@ -69,7 +82,9 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 
 
 Filtered = within_transform(X, FE = TRUE, TE = TRUE,
-                            uniform_weights = TRUE, nEval_chunk = nEval)
+                            uniform_weights = FALSE, nEval_chunk = nEval,
+                            x = x, kernel.type = "gauss",
+                            method.h = "silverman", chunk_size = 512)
 
 
 X0_raw = Filtered$X0_raw_unrolled
@@ -82,10 +97,44 @@ derivative_estimator = compute_derivative_term(X0_raw, X0_star, x=x,
                                               method.h="silverman", h=NULL, lambda=NULL, 
                                               sparse=FALSE, gc=FALSE, chunk_size=512, Y=Y1)
 
+# plot true VF
+VFx = t(apply(x, 1, VF))
+lengthArrows=0.1
+plot(x, type = "n", xlab = "X1", ylab="X2", main = " ")
+arrows(x[,1],x[,2],x[,1]+lengthArrows*VFx[,1],x[,2]+lengthArrows*VFx[,2],angle=15,col="black",length=0.05)
+abline(h=0)
+abline(v=0)
+
 # plot the derivative estimator
+lengthArrows=1.0
+JVF1x = t(apply(derivative_estimator$x, 1, JVF1))
+plot(x, type = "n", xlab = "X1", ylab="X2", main = "Tutte frecce")
+arrows(derivative_estimator$x[,1], derivative_estimator$x[,2],
+       derivative_estimator$x[,1] + lengthArrows*JVF1x[,1],
+       derivative_estimator$x[,2] + lengthArrows*JVF1x[,2],
+       length = 0.05, angle = 15, col = "black")
+
+arrows(derivative_estimator$x[,1], derivative_estimator$x[,2],
+       derivative_estimator$x[,1] + lengthArrows*derivative_estimator$estimator[,1],
+       derivative_estimator$x[,2] + lengthArrows*derivative_estimator$estimator[,2],
+       length = 0.05, angle = 15, col = "blue")
+
+
+ErrorVF1 = JVF1x - derivative_estimator$estimator
+plot(x, type = "n", xlab = "X1", ylab="X2", main = "Error")
+arrows(derivative_estimator$x[,1], derivative_estimator$x[,2],
+       derivative_estimator$x[,1] + lengthArrows*ErrorVF1[,1],
+       derivative_estimator$x[,2] + lengthArrows*ErrorVF1[,2],
+       length = 0.05, angle = 15, col = "red")
+
+errorNorm = sqrt((derivative_estimator$estimator[,1] - JVF1x[,1])^2 + (derivative_estimator$estimator[,2] - JVF1x[,2])^2)/sqrt(JVF1x[,1]^2+JVF1x[,2]^2)
+image.plot(x = unique(x[,1]), y = unique(x[,2]), z = matrix(log10(errorNorm), nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab="x",ylab="y",main="error norm rel (log10)")
+
+
 plot(x[,1], derivative_estimator$estimator[,1], type="p", col="red", pch=16,
-     xlab="x", ylab="derivative", main="Derivative Estimator")
-abline(h=-0.1, col="black", lty=2)
+     xlab="x", ylab="derivative", main="Derivative Estimator", ylim=c(-0.5,0.5))
+lines(x[,1], -0.01*(12*x[,1]^2-2), col="black", lty=2)
+
 
 derivative_estimator = compute_derivative_term(X0_raw, X0_star, x=x,
                                               kernel.type="gauss", D=NULL, 
@@ -94,9 +143,8 @@ derivative_estimator = compute_derivative_term(X0_raw, X0_star, x=x,
 
 # plot the derivative estimator
 plot(x[,2], derivative_estimator$estimator[,2], type="p", col="red", pch=16,
-     xlab="x", ylab="derivative", main="Derivative Estimator")
-abline(h=0.9, col="black", lty=2)
-
+     xlab="x", ylab="derivative", main="Derivative Estimator", ylim=c(-0.1,0.1))
+abline(h=-0.01*2, col="black", lty=2)
 
 # # --- Testing within_transform ---
 
