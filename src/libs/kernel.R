@@ -180,16 +180,54 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
                 if ( det(MDenominator[,,k]) == 0 ) {
                     return(rep(NaN,3))
                 }
-                return(as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k]))
+                
+                # SVG GINV
+                # A = MDenominator[,,k]
+                # svd_A <- svd(A)
+                # U <- svd_A$u
+                # D <- diag(svd_A$d)
+                # V <- svd_A$v
+                # 
+                # # The singular values show the problem - they get incredibly small
+                # # print(svd_A$d)
+                # #>  [1] 1.664468e+00 2.871578e-01 2.305413e-02 1.134737e-03 3.655890e-05
+                # #>  [6] 7.978254e-07 1.171866e-08 1.116035e-10 6.641618e-13 2.302307e-15
+                # 
+                # # Compute the pseudoinverse of A by inverting non-tiny singular values
+                # # Set a tolerance to avoid dividing by nearly zero
+                # tol <- .Machine$double.eps
+                # d_inv <- 1 / svd_A$d
+                # d_inv[svd_A$d < tol] <- 0 # Crucial step: treat tiny values as zero
+                # D_inv <- diag(d_inv)
+                # 
+                # # A+ = V D+ U'
+                # A_pinv <- V %*% D_inv %*% t(U)
+                # sol  <- as.numeric(A_pinv %*% bConstant[,k])
+                
+                # QR
+                # A = MDenominator[,,k]
+                # sol = as.numeric(solve(qr(A, tol = 1e-32,LAPACK = FALSE), bConstant[,k]))
+
+                # GINV
+                # sol = as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k])
+                
+                # # RIDGE
+                lambda = 1e-4 # small ridge parameter to avoid singularity
+                A = MDenominator[,,k]
+                sol = as.numeric(solve(A + lambda * diag(3), bConstant[,k]))
+
+                return(sol)
             }
             solutions <- matrix(unlist(purrr::map(1:nEval_chunk, ~ solve_system(.x))),nrow=3,byrow = FALSE)[1,]
             
+
             calculate_Hkk <- function(k) { # k is index within chunk (1 to nEval_chunk)
                 Sk = MDenominator[,,k]
                 # Check for singularity
                 if ( det(Sk) == 0 ) {
                     return(NaN)
                 }
+                
                 Hkk = ginv(Sk)[1, 1]
                 return(Hkk)
             }

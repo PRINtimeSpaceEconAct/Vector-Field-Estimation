@@ -265,12 +265,18 @@ within_transform <- function(X,
     dim(X0_star_unrolled) <- c((nT-1) * nObs, 2, nEval_chunk)
 
     # Unroll Y_star
-    Y1_unrolled <- aperm(Y_star[,1,,], c(2, 1, 3))
-    dim(Y1_unrolled) <- c((nT-1) * nObs, nEval_chunk)
-    Y2_unrolled <- aperm(Y_star[,2,,], c(2, 1, 3))
-    dim(Y2_unrolled) <- c((nT-1) * nObs, nEval_chunk)
-
-    return(listN(X0_star_unrolled, Y1_unrolled, Y2_unrolled, X0_raw_unrolled))
+    Y1_star_unrolled <- aperm(Y_star[,1,,], c(2, 1, 3))
+    dim(Y1_star_unrolled) <- c((nT-1) * nObs, nEval_chunk)
+    Y2_star_unrolled <- aperm(Y_star[,2,,], c(2, 1, 3))
+    dim(Y2_star_unrolled) <- c((nT-1) * nObs, nEval_chunk)
+    
+    # Unroll also Y
+    Y_unrolled <- aperm(Y, c(3, 1, 2))
+    dim(Y_unrolled) <- c((nT-1) * nObs, 2)
+    Y1_unrolled = Y_unrolled[,1]
+    Y2_unrolled = Y_unrolled[,2]
+    
+    return(listN(X0_star_unrolled, Y1_star_unrolled, Y2_star_unrolled, X0_raw_unrolled,Y1_unrolled,Y2_unrolled))
 }
 
 compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
@@ -282,13 +288,12 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
     invS = solve(covX)
     sqrtinvS = expm::sqrtm(solve(covX))
     detS = det(covX)
+    nEval = nrow(x)
     
     Z = X %*% sqrtinvS
-    Z_star <- simplify2array(purrr::map(1:dim(X_star)[3], ~ X_star[,,.x] %*% sqrtinvS))
+    Z_star <- simplify2array(purrr::map(1:nEval, ~ X_star[,,.x] %*% sqrtinvS))
     z = x %*% sqrtinvS
     
-    if (is.null(x)) { x = defineEvalPoints(X,nEval) }
-    nEval =  nrow(x)
     if (DEBUG) {
         print(paste("nEval: ",nEval))
         print(paste("nObs: ",nObs)) }
@@ -354,7 +359,16 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
             if ( det(MDenominator[,,k]) == 0 ) {
                 return(rep(NaN,2))
             }
-            return(as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k]))
+            
+            # GINV
+            # sol = as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k])
+            
+            # RIDGE
+            lambda = 1e-3 # small ridge parameter to avoid singularity
+            A = MDenominator[,,k]
+            sol = as.numeric(solve(A + lambda * diag(2), bConstant[,k]))
+            
+            return(sol)
         }
         solutions <- matrix(unlist(purrr::map(1:current_chunk_size, ~ solve_system(.x))),
                             nrow=2,byrow = FALSE)
@@ -364,4 +378,103 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
         if (gc == TRUE){ gc() }
     }
     return(listN(x, estimator, h, method.h, kernel.type))
+}
+
+#' Computes the potential function m(x)
+#'
+#' This function computes m(x) based on the formula:
+#' m(x) = m_0 + (1/N/T) * sum_{i,t} [beta(x_0)^T * (X_{i,t} - x_0) - beta(x)^T * (X_{i,t} - x)]
+#'
+#' @param X_unrolled A 2D matrix of size (nObs * nT) x 2 representing the unrolled panel data.
+#' @param nObs The number of observations.
+#' @param nT The number of time periods.
+#' @param x A matrix of evaluation points of size nEval x 2.
+#' @param beta A matrix of size nEval x 2, representing beta(x) for each evaluation point.
+#' @param m_0 A numeric value for the constant of integration.
+#' @param x0 A numeric vector of size 2 for the reference point.
+#' @param beta_0 A numeric vector of size 2 for beta(x0).
+#' @return A numeric vector of size nEval with the values of m(x).
+#' @export
+compute_m <- function(X_unrolled, x, beta, m_0, x0, beta_0) {
+
+    NT = dim(X_unrolled)[1]
+
+    # Compute the first term of the sum: sum_{i,t} beta(x0)^T * (X_{i,t} - x0)
+    # This does not depend on the evaluation points x
+    diff_x0 <- sweep(X_unrolled, 2, x0, "-")
+    term1 <- diff_x0 %*% beta_0
+    S1 <- sum(term1)
+
+    # Compute the second term of the sum: sum_{i,t} beta(x)^T * (X_{i,t} - x)
+    # This depends on the evaluation points x
+    
+    # Use computeDcomponents to get (x - X)
+    # The result z1, z2 are matrices of size (N*T) x nEval
+    # z1[it, e] = x[e,1] - X_unrolled[it, 1]
+    D_components <- computeDcomponents(X_unrolled, x, sparse = FALSE)
+    
+    # We need (X - x), so we negate the results
+    Diff1 <- -D_components$z1
+    Diff2 <- -D_components$z2
+    
+    # S2 will be a vector of size nEval
+    # For each evaluation point e, we compute S2[e] = sum_{i,t} (beta_e^T * (X_{i,t} - x_e))
+    # beta_e^T * (X_{it} - x_e) = beta[e,1]*(X_{it,1}-x_{e,1}) + beta[e,2]*(X_{it,2}-x_{e,2})
+    # This is beta[e,1]*Diff1[it,e] + beta[e,2]*Diff2[it,e]
+    
+    # Vectorized computation of the second term
+    term2_1 <- sweep(Diff1, 2, beta[, 1], "*")
+    term2_2 <- sweep(Diff2, 2, beta[, 2], "*")
+    term2 <- term2_1 + term2_2
+    
+    S2 <- colSums(term2)
+    
+    # Final computation of m(x)
+    # m(x) = m_0 + (1/N/T) * (S1 - S2)
+    m_x <- m_0 + (1 / NT) * (S1 - S2)
+    
+    return(m_x)
+}
+
+compute_m0 <- function(X_unrolled, Y_unrolled, beta, x0, beta_0) {
+    NT = dim(X_unrolled)[1]
+    
+    # Compute the first term of the sum: sum_{i,t} beta(x0)^T * (X_{i,t} - x0)
+    # This does not depend on the evaluation points x
+    diff_x0 <- sweep(X_unrolled, 2, x0, "-")
+    term1 <- diff_x0 %*% beta_0
+    S1 <- sum(term1)
+    
+    # Compute the second term of the sum: sum_{i,t} beta(x)^T * (X_{i,t} - x)
+    # This depends on the evaluation points x
+    
+    # Use computeDcomponents to get (x - X)
+    # The result z1, z2 are matrices of size (N*T) x nEval
+    # z1[it, e] = x[e,1] - X_unrolled[it, 1]
+    D_components <- computeDcomponents(X_unrolled, X_unrolled, sparse = FALSE)
+    
+    # We need (X - x), so we negate the results
+    Diff1 <- -D_components$z1
+    Diff2 <- -D_components$z2
+    
+    # S2 will be a vector of size nEval
+    # For each evaluation point e, we compute S2[e] = sum_{i,t} (beta_e^T * (X_{i,t} - x_e))
+    # beta_e^T * (X_{it} - x_e) = beta[e,1]*(X_{it,1}-x_{e,1}) + beta[e,2]*(X_{it,2}-x_{e,2})
+    # This is beta[e,1]*Diff1[it,e] + beta[e,2]*Diff2[it,e]
+    
+    # Vectorized computation of the second term
+    term2_1 <- sweep(Diff1, 2, beta[, 1], "*")
+    term2_2 <- sweep(Diff2, 2, beta[, 2], "*")
+    term2 <- term2_1 + term2_2
+    
+    S2 <- 1/NT * sum(term2)
+    
+    Sy = sum(Y_unrolled) 
+    
+    # Final computation of m(x)
+    # m(x) = m_0 + (1/N/T) * (S1 - S2)
+    
+    m_0 <- (1 / NT) * (Sy - S1 + S2)
+    
+    return(m_0)
 }

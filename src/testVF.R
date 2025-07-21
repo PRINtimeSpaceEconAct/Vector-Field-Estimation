@@ -49,21 +49,22 @@ yGrid = seq(from=-1, to=1, length.out=round(sqrt(nEval)))
 x = as.matrix(expand.grid(xGrid, yGrid))
 
 # stima ----
-t0 = Sys.time()
-# est_field_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
-#                                      chunk_size=3000,
-#                                      sparse=FALSE, gc=TRUE, hOpt = TRUE, alphaOpt = TRUE)
-est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
-                                     chunk_size=1000,
-                                     sparse=FALSE, gc=TRUE, 
-                                     hOpt = TRUE, alphaOpt = TRUE)
+
+est_field_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
+                                     chunk_size=3000,
+                                     sparse=FALSE, gc=TRUE, hOpt = TRUE, alphaOpt = TRUE)
+
+# est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
+#                                      chunk_size=1000,
+#                                      sparse=FALSE, gc=TRUE, 
+#                                      hOpt = TRUE, alphaOpt = TRUE)
 
 # bootstrap
-est_field_adaptive_bootstrap = bootstrapKernelFieldErrors(est_field_adaptive, B = 10)
-signifBoot = significanceBootstrap(est_field_adaptive,est_field_adaptive_bootstrap)
+# est_field_adaptive_bootstrap = bootstrapKernelFieldErrors(est_field_adaptive, B = 10)
+# signifBoot = significanceBootstrap(est_field_adaptive,est_field_adaptive_bootstrap)
 
 # est = est_field_adaptive
-t = Sys.time() - t0
+
 
 # plot ----
 # plot campo vero ----
@@ -167,3 +168,5 @@ abline(h=0)
 abline(v=0)
 dev.copy2pdf(file="testPics/LogVARdoubleWellNormRel.pdf")
 par(op)
+
+
