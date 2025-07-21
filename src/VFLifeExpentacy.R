@@ -455,13 +455,37 @@ iBest = which.min(sqrt((x[,1]-meanPoint[1])^2 + (x[,2]-meanPoint[2])^2))
 m10 = compute_m0(X_unrolled=X0_raw, Y_unrolled=Y1, beta=derivative_obs_1$estimator, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
 m20 = compute_m0(X_unrolled=X0_raw, Y_unrolled=Y2, beta=derivative_obs_2$estimator, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 
-# VF_hat1 = compute_m(X0_raw, x, beta=derivative_estimator_1$estimator, m_0=VF(x[iBest,])[1], x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
-# VF_hat2 = compute_m(X0_raw, x, beta=derivative_estimator_2$estimator, m_0=VF(x[iBest,])[2], x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 VF_hat1 = compute_m(X0_raw, x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
 VF_hat2 = compute_m(X0_raw, x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 
 # Stitch together the two components of the vector field
 VF_hat = cbind(VF_hat1, VF_hat2)
+
+VF_hat_old <- VF_hat
+
+# Call the new encapsulated function from panel.R
+panel_vf_results <- estimate_panel_vf(X,
+                                      x = x,
+                                      nEval = nEval,
+                                      FE = TRUE,
+                                      TE = TRUE,
+                                      uniform_weights = TRUE,
+                                      kernel.type = "gauss",
+                                      method.h = "silverman",
+                                      chunk_size = 512,
+                                      sparse = FALSE,
+                                      gc = FALSE)
+
+VF_hat_new <- panel_vf_results$VF_hat
+
+# Compare the results
+cat("\n\n--- Comparison between old and new method ---\n")
+cat("Summary of differences (Old - New):\n")
+print(summary(VF_hat_old - VF_hat_new))
+cat("\nAre they numerically equal?\n")
+print(all.equal(VF_hat_old, VF_hat_new))
+cat("---------------------------------------------\n\n")
+
 
 # rimuovi la media
 # VF_hat = cbind(VF_hat1, VF_hat2) - c(mean(Y1),mean(Y2))

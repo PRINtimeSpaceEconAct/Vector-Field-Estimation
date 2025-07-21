@@ -478,3 +478,95 @@ compute_m0 <- function(X_unrolled, Y_unrolled, beta, x0, beta_0) {
     
     return(m_0)
 }
+
+#' Estimates a vector field from panel data with fixed and time effects.
+#'
+#' This function implements a procedure to estimate a vector field from panel data,
+#' allowing for the removal of fixed and time effects. It wraps several steps:
+#' data transformation, derivative estimation, and vector field reconstruction.
+#'
+#' @param X A 3D array of size nObs x 2 x nT representing the panel data.
+#' @param x A matrix of evaluation points of size nEval x 2.
+#' @param nEval The number of evaluation points for the weights.
+#' @param FE A logical value indicating whether to include fixed effects.
+#' @param TE A logical value indicating whether to include time effects.
+#' @param uniform_weights A logical value for using uniform weights in transformation.
+#' @param kernel.type The kernel function to be used.
+#' @param method.h The method for bandwidth selection.
+#' @param chunk_size The size of chunks for processing.
+#' @param sparse Logical, for sparse matrix calculations.
+#' @param gc Logical, for garbage collection.
+#' @return A list containing the estimated vector field `VF_hat`, the evaluation points `x`, and other intermediate results.
+#' @export
+estimate_panel_vf <- function(X,
+                              x,
+                              nEval,
+                              FE = TRUE,
+                              TE = TRUE,
+                              uniform_weights = TRUE,
+                              kernel.type = "gauss",
+                              method.h = "silverman",
+                              chunk_size = 512,
+                              sparse = FALSE,
+                              gc = FALSE) {
+
+    # 1. Within transformation
+    Filtered <- within_transform(X,
+                                 FE = FE, TE = TE,
+                                 uniform_weights = uniform_weights, nEval_chunk = nEval,
+                                 x = x, kernel.type = kernel.type,
+                                 method.h = method.h, chunk_size = chunk_size)
+
+    X0_raw <- Filtered$X0_raw_unrolled
+    X0_star <- Filtered$X0_star_unrolled
+    Y1_star <- Filtered$Y1_star_unrolled
+    Y2_star <- Filtered$Y2_star_unrolled
+    Y1 <- Filtered$Y1_unrolled
+    Y2 <- Filtered$Y2_unrolled
+    
+    nObs = dim(X)[1]
+    nT = dim(X)[3]
+
+    # 2. Estimate derivatives at evaluation points
+    derivative_estimator_1 <- compute_derivative_term(X0_raw, X0_star, x=x,
+                                                      kernel.type=kernel.type, D=NULL,
+                                                      method.h=method.h, h=NULL, lambda=NULL,
+                                                      sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y1_star)
+
+    derivative_estimator_2 <- compute_derivative_term(X0_raw, X0_star, x=x,
+                                                      kernel.type=kernel.type, D=NULL,
+                                                      method.h=method.h, h=NULL, lambda=NULL,
+                                                      sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y2_star)
+
+    # 3. Estimate derivatives at observed points
+    # Note: The original code for Y had a potential bug, using nrow(Y1_star) instead of nrow(X0_raw).
+    # Correcting it here.
+    X_star_obs <- X0_star[,, rep(1, nrow(X0_raw))]
+    Y1_star_obs <- Y1_star[, rep(1, nrow(Y1_star))]
+    Y2_star_obs <- Y2_star[, rep(1, nrow(Y2_star))]
+    
+    derivative_obs_1 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
+                                                kernel.type=kernel.type, D=NULL,
+                                                method.h=method.h, h=NULL, lambda=NULL,
+                                                sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y1_star_obs)
+
+    derivative_obs_2 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
+                                                kernel.type=kernel.type, D=NULL,
+                                                method.h=method.h, h=NULL, lambda=NULL,
+                                                sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y2_star_obs)
+
+    # 4. Compute m0
+    meanPoint <- colSums(X0_raw) / nrow(X0_raw)
+    iBest <- which.min(rowSums(sweep(x, 2, meanPoint)^2))
+
+    m10 <- compute_m0(X_unrolled=X0_raw, Y_unrolled=Y1, beta=derivative_obs_1$estimator, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    m20 <- compute_m0(X_unrolled=X0_raw, Y_unrolled=Y2, beta=derivative_obs_2$estimator, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+
+    # 5. Compute vector field
+    VF_hat1 <- compute_m(X0_raw, x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    VF_hat2 <- compute_m(X0_raw, x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+
+    VF_hat <- cbind(VF_hat1, VF_hat2)
+
+    return(listN(VF_hat, x, X0_raw, Y1, Y2, derivative_obs_1, derivative_obs_2, iBest, derivative_estimator_1, derivative_estimator_2, m10, m20))
+}
