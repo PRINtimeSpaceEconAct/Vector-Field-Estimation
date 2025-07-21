@@ -566,7 +566,9 @@ estimate_panel_vf <- function(X,
     VF_hat1 <- compute_m(X0_raw, x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
     VF_hat2 <- compute_m(X0_raw, x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 
-    VF_hat <- cbind(VF_hat1, VF_hat2)
+    estimator <- cbind(VF_hat1, VF_hat2)
 
-    return(listN(VF_hat, x, X0_raw, Y1, Y2, derivative_obs_1, derivative_obs_2, iBest, derivative_estimator_1, derivative_estimator_2, m10, m20))
+    return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, chunk_size, sparse, gc,
+                 derivative_estimator_1, derivative_estimator_2, derivative_obs_1, derivative_obs_2, 
+                 iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
 }

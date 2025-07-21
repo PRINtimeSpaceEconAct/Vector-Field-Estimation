@@ -3,7 +3,7 @@ setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/
 # setwd("/Users/davidefiaschi/Library/CloudStorage/OneDrive-UniversityofPisa/Cristiano\ Ricci\'s\ files\ -\ timeSpaceEvolutionEcAct/RVF/R\ code/Vector\ Field\ Estimation")
 
 rm(list = ls())
-DEBUG = TRUE
+DEBUG = FALSE
 source("src/libs/loadLib.R")
 library(dplyr)
 library(sm)
@@ -426,21 +426,18 @@ panel_vf_results <- estimate_panel_vf(X,
                                       sparse = FALSE,
                                       gc = FALSE)
 
-VF_hat <- panel_vf_results$VF_hat
+VF_hat <- panel_vf_results$estimator
+X0_raw <- panel_vf_results$X0_raw
 
-# rimuovi la media
-# VF_hat = cbind(VF_hat1, VF_hat2) - c(mean(Y1),mean(Y2))
+bootstrap_samples <- bootstrapPanelVF(panel_vf_results, B = 100)
+signifBoot <- significanceBootstrap(panel_vf_results, bootstrap_samples, p_crit = 0.01)
 
 xGrid = seq(from=min(X[,1,]), to=max(X[,1,]), length.out=round(sqrt(nEval)))
 yGrid = seq(from=min(X[,2,]), to=max(X[,2,]), length.out=round(sqrt(nEval)))
 x = as.matrix(expand.grid(xGrid, yGrid))
 
-# remove arrows farther than 0.1 from any point in X0_raw
-for (i in 1:nEval){
-  if (min(sqrt((x[i,1]-X0_raw[,1])^2 + (x[i,2]-X0_raw[,2])^2)) > 0.75) {
-    VF_hat[i,] = c(0, 0)
-  }
-}
+# Filter for significance
+VF_hat[!signifBoot, ] <- 0
 
 x[,1] = x[,1]/median(filter(data,Year==2010)$GDP)
 x[,2] = x[,2]/median(filter(data,Year==2010)$LE)
@@ -471,6 +468,17 @@ contour(est.dens$eval.points[,1], est.dens$eval.points[,2], est.dens$estimate,ad
 
 # grid()
 dev.copy2pdf(file="outpics/VF_GDP_LE.pdf",width=7,height=7,family = "mono")
+
+# Extract variables from panel_vf_results for cleaner code
+derivative_obs_1 <- panel_vf_results$derivative_obs_1
+derivative_obs_2 <- panel_vf_results$derivative_obs_2
+derivative_estimator_1 <- panel_vf_results$derivative_estimator_1
+derivative_estimator_2 <- panel_vf_results$derivative_estimator_2
+iBest <- panel_vf_results$iBest
+m10 <- panel_vf_results$m10
+m20 <- panel_vf_results$m20
+Y1 <- panel_vf_results$Y1
+Y2 <- panel_vf_results$Y2
 
 # reconstruct FE
 VF_hat1 = compute_m(X0_raw, X0_raw, beta=derivative_obs_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
@@ -515,16 +523,16 @@ est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="gauss",
                                      sparse=FALSE, gc=TRUE, 
                                      hOpt = TRUE, alphaOpt = TRUE)
 est_field_adaptive_bootstrap = bootstrapKernelFieldErrors(est_field_adaptive, B = 100)
-signifBoot = significanceBootstrap(est_field_adaptive,est_field_adaptive_bootstrap)
+signifBoot_adaptive = significanceBootstrap(est_field_adaptive,est_field_adaptive_bootstrap)
 
-# signifInd = which(signifBoot)
-signifInd = 1:length(signifBoot)
+#signifInd = which(signifBoot_adaptive)
+signifInd_adaptive = 1:length(signifBoot_adaptive)
 # dev.new()
 lengthArrows=0.1
 plot(x, type = "n", xlab = "GDP (log)", ylab="LE", main = " ")
-arrows(est_field_adaptive$x[signifInd,1], est_field_adaptive$x[signifInd,2],
-       est_field_adaptive$x[signifInd,1] + lengthArrows*est_field_adaptive$estimator[signifInd,1], 
-       est_field_adaptive$x[signifInd,2] + lengthArrows*est_field_adaptive$estimator[signifInd,2],
+arrows(est_field_adaptive$x[signifInd_adaptive,1], est_field_adaptive$x[signifInd_adaptive,2],
+       est_field_adaptive$x[signifInd_adaptive,1] + lengthArrows*est_field_adaptive$estimator[signifInd_adaptive,1], 
+       est_field_adaptive$x[signifInd_adaptive,2] + lengthArrows*est_field_adaptive$estimator[signifInd_adaptive,2],
        length = 0.05, angle = 15, col = "black")
 dataFirst = filter(data,Year == min(Year))
 dataLatest = filter(data,Year == max(Year))

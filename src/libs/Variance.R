@@ -1,3 +1,5 @@
+source("src/libs/panel.R")
+
 #' Performs statistical significance testing for vector field estimations
 #' 
 #' @param est An object containing vector field estimation results
@@ -147,6 +149,83 @@ bootstrapKernelFieldErrors <- function(result, B = 500, chunk_size = nrow(result
     return(estimators_array)
 }
 
+
+#' Performs bootstrap resampling for panel data vector field estimations.
+#'
+#' @param result An object from `estimate_panel_vf` containing estimation results and parameters.
+#' @param B Number of bootstrap replicates (default: 500).
+#'
+#' @return A 3D array of bootstrapped field estimators with dimensions [nEval x 2 x B].
+bootstrapPanelVF <- function(result, B = 500) {
+    # 1. Extract parameters from the result object
+    X <- result$X
+    x_eval <- result$x
+    nEval <- result$nEval
+    FE <- result$FE
+    TE <- result$TE
+    uniform_weights <- result$uniform_weights
+    kernel.type <- result$kernel.type
+    method.h <- result$method.h
+    chunk_size <- result$chunk_size
+    sparse <- result$sparse
+    gc <- result$gc
+
+    # 2. Prepare data and storage
+    dims <- dim(X)
+    nObs <- dims[1]
+    nEvalPoints <- nrow(x_eval)
+    estimators_array <- array(NA, dim = c(nEvalPoints, 2, B))
+
+    # 3. Setup progress bar
+    show_progress <- !exists("DEBUG") || !DEBUG
+    if (show_progress) {
+        cat("Running bootstrap with", B, "replicates for panel VF...\n")
+        pb <- createCustomProgressBar(min = 0, max = B)
+    } else {
+        cat("Starting bootstrap with", B, "replicates for panel VF...\n")
+    }
+
+    # 4. Bootstrap loop
+    for (b in 1:B) {
+        # Resample individuals (cross-sectional bootstrap)
+        idx_star <- sample(1:nObs, nObs, replace = TRUE)
+        X_star <- X[idx_star, , , drop = FALSE]
+
+        if (show_progress) {
+            pb$update(b, paste("Bootstrap iteration", b, "/", B))
+        }
+
+        # Re-estimate using the bootstrapped data
+        # All original estimation parameters are passed through
+        est_star <- estimate_panel_vf(
+            X = X_star,
+            x = x_eval,
+            nEval = nEvalPoints,
+            FE = FE,
+            TE = TE,
+            uniform_weights = uniform_weights,
+            kernel.type = kernel.type,
+            method.h = method.h,
+            chunk_size = chunk_size,
+            sparse = sparse,
+            gc = gc
+        )
+
+        # Store results
+        estimators_array[, , b] <- est_star$estimator
+    }
+
+    # 5. Clean up and return
+    if (show_progress) {
+        pb$close()
+        cat("Bootstrap completed.\n")
+    } else {
+        cat("\nBootstrap completed.\n")
+    }
+
+    return(estimators_array)
+}
+
 #' Performs significance testing based on bootstrap samples for vector field estimations
 #' 
 #' @param result An object containing vector field estimation results
@@ -176,7 +255,5 @@ significanceBootstrap <- function(result, bootstrapSamples, p_crit=0.05){
     
     return(signifEst) 
 }
-
-
 
 
