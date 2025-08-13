@@ -169,12 +169,19 @@ bootstrapPanelVF <- function(result, B = 500) {
     chunk_size <- result$chunk_size
     sparse <- result$sparse
     gc <- result$gc
+    
+    X0_raw <- result$X0_raw
+    Y1 <- result$Y1_unrolled
+    Y2 <- result$Y2_unrolled
 
     # 2. Prepare data and storage
     dims <- dim(X)
     nObs <- dims[1]
+    nT <- dims[3]
     nEvalPoints <- nrow(x_eval)
     estimators_array <- array(NA, dim = c(nEvalPoints, 2, B))
+    FE_array <- array(NA, dim = c(nObs, 2, B))
+    TE_array <- array(NA, dim = c(nT-1, 2, B))
 
     # 3. Setup progress bar
     show_progress <- !exists("DEBUG") || !DEBUG
@@ -210,9 +217,14 @@ bootstrapPanelVF <- function(result, B = 500) {
             sparse = sparse,
             gc = gc
         )
+        effects <- get_effects(est_star, X_obs = X0_raw, FE = TRUE, TE = TRUE)
+        alpha_i_hat <- effects$alpha_i
+        gamma_t_hat <- effects$gamma_t
 
         # Store results
         estimators_array[, , b] <- est_star$estimator
+        FE_array[, , b] <- alpha_i_hat
+        TE_array[, , b] <- gamma_t_hat
     }
 
     # 5. Clean up and return
@@ -223,7 +235,7 @@ bootstrapPanelVF <- function(result, B = 500) {
         cat("\nBootstrap completed.\n")
     }
 
-    return(estimators_array)
+    return(listN(estimators_array, FE_array, TE_array))
 }
 
 #' Performs significance testing based on bootstrap samples for vector field estimations
@@ -236,11 +248,11 @@ bootstrapPanelVF <- function(result, B = 500) {
 #'         where TRUE means the point has a significant vector field direction
 significanceBootstrap <- function(result, bootstrapSamples, p_crit=0.05){
    
-    nEval = nrow(result$x)
+    nEval = nrow(result)
     estConfInt = matrix(NA, nrow=nEval, ncol=2)
     
     # Identify where we can calculate directional vectors (non-zero and non-NaN values)
-    whereEst = (result$estimator[,1]!=0 & result$estimator[,2]!=0) & (!is.nan(result$estimator[,1]) & !is.nan(result$estimator[,2]))
+    whereEst = (result[,1]!=0 & result[,2]!=0) & (!is.nan(result[,1]) & !is.nan(result[,2]))
     whereEstInd = which(whereEst)
     
     # Calculate significance based on bootstrap distribution

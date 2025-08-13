@@ -136,13 +136,13 @@ meanPoint = apply(X0_raw, MARGIN = c(2), FUN = sum)/((nT-1)*nObs)
 iBest = which.min(sqrt((x[,1]-meanPoint[1])^2 + (x[,2]-meanPoint[2])^2))
 
 
-m10 = compute_m0(X_unrolled=X0_raw, Y_unrolled=Y1, beta=derivative_obs_1$estimator, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
-m20 = compute_m0(X_unrolled=X0_raw, Y_unrolled=Y2, beta=derivative_obs_2$estimator, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+m10 = compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y1, beta=derivative_obs_1$estimator, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+m20 = compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y2, beta=derivative_obs_2$estimator, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 
 # VF_hat1 = compute_m(X0_raw, x, beta=derivative_estimator_1$estimator, m_0=VF(x[iBest,])[1], x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
 # VF_hat2 = compute_m(X0_raw, x, beta=derivative_estimator_2$estimator, m_0=VF(x[iBest,])[2], x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
-VF_hat1 = compute_m(X0_raw, x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
-VF_hat2 = compute_m(X0_raw, x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+VF_hat1 = compute_m(X_obs_unrolled=X0_raw, x_eval=x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+VF_hat2 = compute_m(X_obs_unrolled=X0_raw, x_eval=x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 
 # Stitch together the two components of the vector field
 VF_hat = cbind(VF_hat1, VF_hat2)
@@ -176,8 +176,8 @@ image.plot(x = sort(unique(x[,1])), y = sort(unique(x[,2])), z = matrix(log10(er
 contour(est.dens$eval.points[,1], est.dens$eval.points[,2], est.dens$estimate,add=T)
 
 # reconstruct FE
-VF_hat1 = compute_m(X0_raw, X0_raw, beta=derivative_obs_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
-VF_hat2 = compute_m(X0_raw, X0_raw, beta=derivative_obs_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+VF_hat1 = compute_m(X_obs_unrolled=X0_raw, x_eval=X0_raw, beta=derivative_obs_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+VF_hat2 = compute_m(X_obs_unrolled=X0_raw, x_eval=X0_raw, beta=derivative_obs_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 
  
 YObs = aperm(array(cbind(Y1,Y2),dim = c(nT,nObs,2)),c(2,3,1))

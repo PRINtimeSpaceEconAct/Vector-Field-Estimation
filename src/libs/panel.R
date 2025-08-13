@@ -364,7 +364,7 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
             # sol = as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k])
             
             # RIDGE
-            lambda = 1e-3 # small ridge parameter to avoid singularity
+            lambda = 1e-5 # small ridge parameter to avoid singularity
             A = MDenominator[,,k]
             sol = as.numeric(solve(A + lambda * diag(2), bConstant[,k]))
             
@@ -386,8 +386,6 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
 #' m(x) = m_0 + (1/N/T) * sum_{i,t} [beta(x_0)^T * (X_{i,t} - x_0) - beta(x)^T * (X_{i,t} - x)]
 #'
 #' @param X_unrolled A 2D matrix of size (nObs * nT) x 2 representing the unrolled panel data.
-#' @param nObs The number of observations.
-#' @param nT The number of time periods.
 #' @param x A matrix of evaluation points of size nEval x 2.
 #' @param beta A matrix of size nEval x 2, representing beta(x) for each evaluation point.
 #' @param m_0 A numeric value for the constant of integration.
@@ -395,13 +393,13 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
 #' @param beta_0 A numeric vector of size 2 for beta(x0).
 #' @return A numeric vector of size nEval with the values of m(x).
 #' @export
-compute_m <- function(X_unrolled, x, beta, m_0, x0, beta_0) {
+compute_m <- function(X_obs_unrolled, x_eval, beta, m_0, x0, beta_0) {
 
-    NT = dim(X_unrolled)[1]
+    NT = dim(X_obs_unrolled)[1]
 
     # Compute the first term of the sum: sum_{i,t} beta(x0)^T * (X_{i,t} - x0)
     # This does not depend on the evaluation points x
-    diff_x0 <- sweep(X_unrolled, 2, x0, "-")
+    diff_x0 <- sweep(X_obs_unrolled, 2, x0, "-")
     term1 <- diff_x0 %*% beta_0
     S1 <- sum(term1)
 
@@ -411,7 +409,7 @@ compute_m <- function(X_unrolled, x, beta, m_0, x0, beta_0) {
     # Use computeDcomponents to get (x - X)
     # The result z1, z2 are matrices of size (N*T) x nEval
     # z1[it, e] = x[e,1] - X_unrolled[it, 1]
-    D_components <- computeDcomponents(X_unrolled, x, sparse = FALSE)
+    D_components <- computeDcomponents(X_obs_unrolled, x_eval, sparse = FALSE)
     
     # We need (X - x), so we negate the results
     Diff1 <- -D_components$z1
@@ -436,43 +434,25 @@ compute_m <- function(X_unrolled, x, beta, m_0, x0, beta_0) {
     return(m_x)
 }
 
-compute_m0 <- function(X_unrolled, Y_unrolled, beta, x0, beta_0) {
-    NT = dim(X_unrolled)[1]
+compute_m0 <- function(X_obs_unrolled, Y_obs_unrolled, beta, x0, beta_0) {
+    NT = dim(X_obs_unrolled)[1]
     
-    # Compute the first term of the sum: sum_{i,t} beta(x0)^T * (X_{i,t} - x0)
-    # This does not depend on the evaluation points x
-    diff_x0 <- sweep(X_unrolled, 2, x0, "-")
+    diff_x0 <- sweep(X_obs_unrolled, 2, x0, "-")
     term1 <- diff_x0 %*% beta_0
     S1 <- sum(term1)
     
-    # Compute the second term of the sum: sum_{i,t} beta(x)^T * (X_{i,t} - x)
-    # This depends on the evaluation points x
+    D_components <- computeDcomponents(X_obs_unrolled, X_obs_unrolled, sparse = FALSE)
     
-    # Use computeDcomponents to get (x - X)
-    # The result z1, z2 are matrices of size (N*T) x nEval
-    # z1[it, e] = x[e,1] - X_unrolled[it, 1]
-    D_components <- computeDcomponents(X_unrolled, X_unrolled, sparse = FALSE)
-    
-    # We need (X - x), so we negate the results
     Diff1 <- -D_components$z1
     Diff2 <- -D_components$z2
     
-    # S2 will be a vector of size nEval
-    # For each evaluation point e, we compute S2[e] = sum_{i,t} (beta_e^T * (X_{i,t} - x_e))
-    # beta_e^T * (X_{it} - x_e) = beta[e,1]*(X_{it,1}-x_{e,1}) + beta[e,2]*(X_{it,2}-x_{e,2})
-    # This is beta[e,1]*Diff1[it,e] + beta[e,2]*Diff2[it,e]
-    
-    # Vectorized computation of the second term
     term2_1 <- sweep(Diff1, 2, beta[, 1], "*")
     term2_2 <- sweep(Diff2, 2, beta[, 2], "*")
     term2 <- term2_1 + term2_2
     
     S2 <- 1/NT * sum(term2)
     
-    Sy = sum(Y_unrolled) 
-    
-    # Final computation of m(x)
-    # m(x) = m_0 + (1/N/T) * (S1 - S2)
+    Sy = sum(Y_obs_unrolled) 
     
     m_0 <- (1 / NT) * (Sy - S1 + S2)
     
@@ -528,19 +508,18 @@ estimate_panel_vf <- function(X,
     nT = dim(X)[3]
 
     # 2. Estimate derivatives at evaluation points
-    derivative_estimator_1 <- compute_derivative_term(X0_raw, X0_star, x=x,
+    derivative_estimator_1 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
                                                       kernel.type=kernel.type, D=NULL,
                                                       method.h=method.h, h=NULL, lambda=NULL,
                                                       sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y1_star)
 
-    derivative_estimator_2 <- compute_derivative_term(X0_raw, X0_star, x=x,
+    derivative_estimator_2 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
                                                       kernel.type=kernel.type, D=NULL,
                                                       method.h=method.h, h=NULL, lambda=NULL,
                                                       sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y2_star)
 
     # 3. Estimate derivatives at observed points
-    # Note: The original code for Y had a potential bug, using nrow(Y1_star) instead of nrow(X0_raw).
-    # Correcting it here.
+  
     X_star_obs <- X0_star[,, rep(1, nrow(X0_raw))]
     Y1_star_obs <- Y1_star[, rep(1, nrow(Y1_star))]
     Y2_star_obs <- Y2_star[, rep(1, nrow(Y2_star))]
@@ -559,16 +538,43 @@ estimate_panel_vf <- function(X,
     meanPoint <- colSums(X0_raw) / nrow(X0_raw)
     iBest <- which.min(rowSums(sweep(x, 2, meanPoint)^2))
 
-    m10 <- compute_m0(X_unrolled=X0_raw, Y_unrolled=Y1, beta=derivative_obs_1$estimator, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
-    m20 <- compute_m0(X_unrolled=X0_raw, Y_unrolled=Y2, beta=derivative_obs_2$estimator, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
-
+    m10 <- compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y1, beta=derivative_obs_1$estimator, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    m20 <- compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y2, beta=derivative_obs_2$estimator, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+    
     # 5. Compute vector field
-    VF_hat1 <- compute_m(X0_raw, x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
-    VF_hat2 <- compute_m(X0_raw, x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+    VF_hat1 <- compute_m(X_obs_unrolled = X0_raw, x_eval = x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    VF_hat2 <- compute_m(X_obs_unrolled = X0_raw, x_eval = x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 
     estimator <- cbind(VF_hat1, VF_hat2)
 
     return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, chunk_size, sparse, gc,
                  derivative_estimator_1, derivative_estimator_2, derivative_obs_1, derivative_obs_2, 
                  iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
+}
+
+get_effects <- function(panel_estimator, X_obs, FE=TRUE, TE=TRUE) {
+    X_obs_estimator <- panel_estimator$X0_raw
+    derivative_obs_1 <- panel_estimator$derivative_obs_1
+    derivative_obs_2 <- panel_estimator$derivative_obs_2
+    derivative_estimator_1 <- panel_estimator$derivative_estimator_1
+    derivative_estimator_2 <- panel_estimator$derivative_estimator_2
+    iBest <- panel_estimator$iBest
+    m10 <- panel_estimator$m10
+    m20 <- panel_estimator$m20
+    Y1 <- panel_estimator$Y1
+    Y2 <- panel_estimator$Y2
+
+    # reconstruct FE
+    VF_hat1 = compute_m(X_obs_unrolled = X_obs_estimator, x_eval = X_obs, beta=derivative_obs_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    VF_hat2 = compute_m(X_obs_unrolled = X_obs_estimator, x_eval = X_obs, beta=derivative_obs_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+
+    YObs = aperm(array(cbind(Y1,Y2),dim = c(nT-1,nObs,2)),c(2,3,1))
+    VFObs = aperm(array(cbind(VF_hat1,VF_hat2),dim = c(nT-1,nObs,2)),c(2,3,1))
+    if (FE) {
+        alpha_i = apply(YObs - VFObs, MARGIN = c(1, 2), FUN = sum)/(nT-1)
+    }
+    if (TE) {
+        gamma_t = t(apply(YObs - VFObs, MARGIN = c(2, 3), FUN = sum)/nObs)
+    }
+    return(listN(alpha_i, gamma_t))
 }

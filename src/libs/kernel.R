@@ -212,7 +212,7 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
                 # sol = as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k])
                 
                 # # RIDGE
-                lambda = 1e-4 # small ridge parameter to avoid singularity
+                lambda = 1e-5 # small ridge parameter to avoid singularity
                 A = MDenominator[,,k]
                 sol = as.numeric(solve(A + lambda * diag(3), bConstant[,k]))
 
