@@ -91,7 +91,22 @@ compute_weights <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     return(listN(omega_a, omega_b, omega_c))
 }
 
-#' Applies the FE/TE transformations to a given dataset
+#' Applies fixed effect (FE) and/or time effect (TE) transformations to panel data.
+#'
+#' This function takes a 3D array of panel data and applies within-individual (FE),
+#' within-time (TE), or two-way transformations based on the provided weights.
+#' The transformations subtract weighted averages from the original data.
+#'
+#' @param data A 3D array of panel data with dimensions (nObs, 2, nT).
+#' @param nT_data The number of time periods in `data`.
+#' @param omega_a A 3D array of weights for the individual-specific transformation.
+#' @param omega_b A 3D array of weights for the time-specific transformation.
+#' @param omega_c A 3D array of weights for the overall transformation.
+#' @param FE A logical value. If TRUE, the fixed-effect (within-individual) transformation is applied.
+#' @param TE A logical value. If TRUE, the time-effect (within-time) transformation is applied.
+#' @param nEval_chunk The number of evaluation points, determining the fourth dimension of the output array.
+#' @return A 4D array containing the transformed data, with dimensions (nObs, 2, nT, nEval_chunk).
+#' @export
 apply_transformation <- function(data, nT_data, omega_a, omega_b, omega_c, FE, TE, nEval_chunk) {
     data_dims <- dim(data)
     nObs_data <- data_dims[1]
@@ -279,6 +294,27 @@ within_transform <- function(X,
     return(listN(X0_star_unrolled, Y1_star_unrolled, Y2_star_unrolled, X0_raw_unrolled,Y1_unrolled,Y2_unrolled))
 }
 
+#' Computes the derivative term using a local linear estimator.
+#'
+#' This function estimates the derivative of a dependent variable Y with respect to
+#' independent variables X at specified evaluation points x. It uses a local
+#' linear kernel regression approach, handling panel data transformations.
+#'
+#' @param X A numeric matrix of observations (nObs x 2).
+#' @param X_star A 3D array representing the transformed independent variables (nObs x 2 x nEval).
+#' @param x A matrix of evaluation points (nEval x 2).
+#' @param nEval The number of evaluation points, used if x is not provided.
+#' @param kernel.type The type of kernel to use (e.g., "gauss").
+#' @param D A list containing precomputed distance components.
+#' @param method.h The method for bandwidth selection.
+#' @param h The bandwidth value.
+#' @param lambda A numeric vector of observation-specific weights.
+#' @param sparse A logical indicating whether to use sparse matrices.
+#' @param gc A logical indicating whether to perform garbage collection.
+#' @param chunk_size The number of evaluation points to process in each chunk.
+#' @param Y A matrix representing the dependent variable (nObs x nEval).
+#' @return A list containing the evaluation points `x`, the estimated derivatives `estimator`,
+#'         the bandwidth `h`, the bandwidth selection method `method.h`, and the kernel type `kernel.type`.
 compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                              method.h=NULL, h=NULL, lambda=NULL, 
                              sparse=FALSE, gc=FALSE, chunk_size=nrow(x), Y=NULL) {
@@ -380,18 +416,31 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
     return(listN(x, estimator, h, method.h, kernel.type))
 }
 
-#' Computes the potential function m(x)
+#' Reconstructs the scalar potential m(x) from gradient estimates
 #'
-#' This function computes m(x) based on the formula:
-#' m(x) = m_0 + (1/N/T) * sum_{i,t} [beta(x_0)^T * (X_{i,t} - x_0) - beta(x)^T * (X_{i,t} - x)]
+#' Given estimates of the gradient field \(\beta(x) = \nabla m(x)\) and an
+#' anchoring condition \(m(x_0) = m_0\), reconstructs the potential at
+#' evaluation points using
+#'\preformatted{
+#' m(x) = m_0 + (1/NT) * sum_{i,t} [ beta(x_0)^T (X_{i,t} - x_0)
+#'                                   - beta(x)^T   (X_{i,t} - x)   ]
+#'}
+#' where `NT` is the number of unrolled observed points used in estimation.
 #'
-#' @param X_unrolled A 2D matrix of size (nObs * nT) x 2 representing the unrolled panel data.
-#' @param x A matrix of evaluation points of size nEval x 2.
-#' @param beta A matrix of size nEval x 2, representing beta(x) for each evaluation point.
-#' @param m_0 A numeric value for the constant of integration.
-#' @param x0 A numeric vector of size 2 for the reference point.
-#' @param beta_0 A numeric vector of size 2 for beta(x0).
-#' @return A numeric vector of size nEval with the values of m(x).
+#' Input relationships and guidance:
+#' - X_obs_unrolled (NT x 2): unrolled design points used elsewhere (e.g. `X0_raw`).
+#' - x_eval (nEval x 2): grid of evaluation points where m(x) is returned.
+#' - beta (nEval x 2): gradient estimates at each row of `x_eval`.
+#' - x0 (length-2), beta_0 (length-2): anchor point and its gradient; m_0 = m(x0)
+#'   is computed by `compute_m0` using a mean-matching moment.
+#'
+#' @param X_obs_unrolled Numeric matrix (NT x 2) of observed regressor points.
+#' @param x_eval Numeric matrix (nEval x 2) of evaluation points.
+#' @param beta Numeric matrix (nEval x 2): gradient estimates at `x_eval`.
+#' @param m_0 Numeric scalar: anchoring value `m(x0)`.
+#' @param x0 Numeric vector length 2: anchor point `x0`.
+#' @param beta_0 Numeric vector length 2: gradient at `x0`.
+#' @return Numeric vector length nEval with reconstructed m(x).
 #' @export
 compute_m <- function(X_obs_unrolled, x_eval, beta, m_0, x0, beta_0) {
 
@@ -434,13 +483,48 @@ compute_m <- function(X_obs_unrolled, x_eval, beta, m_0, x0, beta_0) {
     return(m_x)
 }
 
+#' Computes the anchoring constant m_0 via mean-matching
+#'
+#' Fixes the additive indeterminacy of m(·) by imposing the sample mean
+#' condition
+#'\preformatted{
+#'   (1/NT) * sum_{i,t} Y_{i,t}  =  (1/NT) * sum_{i,t} m(X_{i,t}).
+#'}
+#' Using the same representation as in `compute_m` and solving for `m_0` gives
+#'\preformatted{
+#' m_0 = (1/NT) * [ sum_{i,t} Y_{i,t}
+#'                  - sum_{i,t} beta(x_0)^T (X_{i,t} - x_0)
+#'                  + (1/NT) * sum_{j,s} beta(X_{j,s})^T sum_{i,t} (X_{i,t} - X_{j,s}) ].
+#'}
+#' The code implements this as three terms:
+#' - Sy = sum of Y over all unrolled observations
+#' - S1 = sum of the reference linear term beta_0^T (X_{i,t} - x0)
+#' - S2 = (1/NT) * sum_{j,s} beta(X_{j,s})^T sum_{i,t} (X_{i,t} - X_{j,s})
+#'   (the outer 1/NT in the return line yields the overall 1/NT^2 on the
+#'   pairwise double sum).
+#'
+#' Inputs should be aligned with the rest of the pipeline:
+#' - X_obs_unrolled (NT x 2): same unrolled design matrix used for derivatives (e.g. `X0_raw`).
+#' - Y_obs_unrolled (NT): component of observed changes aligned with rows of X (e.g. `Y1` or `Y2`).
+#' - beta (NT x 2): gradient evaluated at each observed row (e.g. `derivative_obs_*$estimator`).
+#' - x0, beta_0: chosen anchor and its gradient; using x0 at the sample mean
+#'   typically makes S1 ≈ 0 and improves stability.
+#'
+#' @param X_obs_unrolled Numeric matrix (NT x 2) of observed regressor points.
+#' @param Y_obs_unrolled Numeric vector length NT with observed dependent values.
+#' @param beta Numeric matrix (NT x 2): gradients at the observed points.
+#' @param x0 Numeric vector length 2: anchor point.
+#' @param beta_0 Numeric vector length 2: gradient at `x0`.
+#' @return Numeric scalar with the integration constant m_0.
 compute_m0 <- function(X_obs_unrolled, Y_obs_unrolled, beta, x0, beta_0) {
     NT = dim(X_obs_unrolled)[1]
     
+    # S1 = sum_{i,t} beta(x0)^T (X_{i,t} - x0)
     diff_x0 <- sweep(X_obs_unrolled, 2, x0, "-")
     term1 <- diff_x0 %*% beta_0
     S1 <- sum(term1)
     
+    # S2 = (1/NT) * sum_{j,s} beta(X_{j,s})^T sum_{i,t} (X_{i,t} - X_{j,s})
     D_components <- computeDcomponents(X_obs_unrolled, X_obs_unrolled, sparse = FALSE)
     
     Diff1 <- -D_components$z1
@@ -452,6 +536,7 @@ compute_m0 <- function(X_obs_unrolled, Y_obs_unrolled, beta, x0, beta_0) {
     
     S2 <- 1/NT * sum(term2)
     
+    # Sy = sum_{i,t} Y_{i,t}
     Sy = sum(Y_obs_unrolled) 
     
     m_0 <- (1 / NT) * (Sy - S1 + S2)
@@ -552,7 +637,24 @@ estimate_panel_vf <- function(X,
                  iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
 }
 
+#' Reconstructs fixed and time effects from an estimated panel vector field model.
+#'
+#' After estimating the vector field, this function computes the individual fixed effects (alpha_i)
+#' and time effects (gamma_t) based on the residuals between the observed changes and the
+#' estimated vector field. The function assumes that `X_obs` has `(nT-1)*nObs` rows.
+#'
+#' @param panel_estimator A list object returned by `estimate_panel_vf`, containing all estimation results.
+#' @param X_obs A matrix of observation points where the effects are to be computed, typically `panel_estimator$X0_raw`.
+#' @param FE A logical value. If TRUE, computes fixed effects.
+#' @param TE A logical value. If TRUE, computes time effects.
+#' @return A list containing the estimated fixed effects `alpha_i` (a matrix of size nObs x 2)
+#'         and time effects `gamma_t` (a matrix of size (nT-1) x 2).
 get_effects <- function(panel_estimator, X_obs, FE=TRUE, TE=TRUE) {
+    x <- panel_estimator$x
+    X <- panel_estimator$X
+    nObs <- dim(X)[1]
+    nT <- dim(X)[3]
+
     X_obs_estimator <- panel_estimator$X0_raw
     derivative_obs_1 <- panel_estimator$derivative_obs_1
     derivative_obs_2 <- panel_estimator$derivative_obs_2
@@ -570,6 +672,10 @@ get_effects <- function(panel_estimator, X_obs, FE=TRUE, TE=TRUE) {
 
     YObs = aperm(array(cbind(Y1,Y2),dim = c(nT-1,nObs,2)),c(2,3,1))
     VFObs = aperm(array(cbind(VF_hat1,VF_hat2),dim = c(nT-1,nObs,2)),c(2,3,1))
+
+    alpha_i <- NULL
+    gamma_t <- NULL
+
     if (FE) {
         alpha_i = apply(YObs - VFObs, MARGIN = c(1, 2), FUN = sum)/(nT-1)
     }

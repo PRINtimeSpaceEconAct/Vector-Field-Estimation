@@ -261,7 +261,7 @@ significanceBootstrap <- function(result, bootstrapSamples, p_crit=0.05){
 
     # If all bootstrap samples are NA, set to non-significant
     estConfInt[is.na(estConfInt)] = FALSE
-    
+
     # Consider significant only if at least one component is significant
     signifEst = rowSums(estConfInt>(1-p_crit)) >= 1
     
