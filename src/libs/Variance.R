@@ -16,6 +16,7 @@ significanceVF <- function(est,p_crit = 0.05){
     h = est$h
     X0 = est$X0
     X1 = est$X1
+    x = est$x
     
     n = nrow(X0)
     Y = X1-X0
@@ -217,7 +218,7 @@ bootstrapPanelVF <- function(result, B = 500) {
             sparse = sparse,
             gc = gc
         )
-        effects <- get_effects(est_star, X_obs = X0_raw, FE = TRUE, TE = TRUE)
+        effects <- get_effects(est_star, X_obs = X0_raw, FE = result$FE, TE = result$TE)
         alpha_i_hat <- effects$alpha_i
         gamma_t_hat <- effects$gamma_t
 

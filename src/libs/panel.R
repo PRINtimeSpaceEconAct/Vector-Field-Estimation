@@ -571,6 +571,7 @@ estimate_panel_vf <- function(X,
                               uniform_weights = TRUE,
                               kernel.type = "gauss",
                               method.h = "silverman",
+                              h = NULL,
                               chunk_size = 512,
                               sparse = FALSE,
                               gc = FALSE) {
@@ -580,7 +581,7 @@ estimate_panel_vf <- function(X,
                                  FE = FE, TE = TE,
                                  uniform_weights = uniform_weights, nEval_chunk = nEval,
                                  x = x, kernel.type = kernel.type,
-                                 method.h = method.h, chunk_size = chunk_size)
+                                 method.h = method.h, h = h, chunk_size = chunk_size)
 
     X0_raw <- Filtered$X0_raw_unrolled
     X0_star <- Filtered$X0_star_unrolled
@@ -595,12 +596,12 @@ estimate_panel_vf <- function(X,
     # 2. Estimate derivatives at evaluation points
     derivative_estimator_1 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
                                                       kernel.type=kernel.type, D=NULL,
-                                                      method.h=method.h, h=NULL, lambda=NULL,
+                                                      method.h=method.h, h=h, lambda=NULL,
                                                       sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y1_star)
 
     derivative_estimator_2 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
                                                       kernel.type=kernel.type, D=NULL,
-                                                      method.h=method.h, h=NULL, lambda=NULL,
+                                                      method.h=method.h, h=h, lambda=NULL,
                                                       sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y2_star)
 
     # 3. Estimate derivatives at observed points
@@ -611,12 +612,12 @@ estimate_panel_vf <- function(X,
     
     derivative_obs_1 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
                                                 kernel.type=kernel.type, D=NULL,
-                                                method.h=method.h, h=NULL, lambda=NULL,
+                                                method.h=method.h, h=h, lambda=NULL,
                                                 sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y1_star_obs)
 
     derivative_obs_2 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
                                                 kernel.type=kernel.type, D=NULL,
-                                                method.h=method.h, h=NULL, lambda=NULL,
+                                                method.h=method.h, h=h, lambda=NULL,
                                                 sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y2_star_obs)
 
     # 4. Compute m0
@@ -631,8 +632,9 @@ estimate_panel_vf <- function(X,
     VF_hat2 <- compute_m(X_obs_unrolled = X0_raw, x_eval = x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 
     estimator <- cbind(VF_hat1, VF_hat2)
+    h <- derivative_estimator_1$h
 
-    return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, chunk_size, sparse, gc,
+    return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, h, chunk_size, sparse, gc,
                  derivative_estimator_1, derivative_estimator_2, derivative_obs_1, derivative_obs_2, 
                  iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
 }

@@ -82,7 +82,7 @@ arrows(dataFirst$GDP.t0,dataFirst$LE.t0, dataFirst$GDP.t1,dataFirst$LE.t1, lengt
 points(dataFirst$GDP.t0,dataFirst$LE.t0,pch=19,col="black",cex=0.5)
 points(dataFirst$GDP.t1,dataFirst$LE.t1,pch=19,col="red",cex=0.5)
 grid()
-dev.copy2pdf(file="scatterArrowsPreston19601965.pdf")
+#dev.copy2pdf(file="scatterArrowsPreston19601965.pdf")
 
 # parameters ----
 nEval = 2500
@@ -101,11 +101,14 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 # est_field = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
 #                                      chunk_size=1000,
 #                                      sparse=FALSE, gc=TRUE)
-est_field = NWfield(X0, X1, x=x, kernel.type="epa",h=1.0,
+# est_field = NWfield(X0, X1, x=x, kernel.type="epa",h=1.0,
+#                                         chunk_size=1000,
+#                                         sparse=FALSE, gc=TRUE
+#                     #,method.h="sj"
+#                     )
+est_field = NWfield(X0, X1, x=x, kernel.type="epa",h=0.6418,
                                         chunk_size=1000,
-                                        sparse=FALSE, gc=TRUE
-                    #,method.h="sj"
-                    )
+                                        sparse=FALSE, gc=TRUE)
 
 
 # plots ----
