@@ -94,7 +94,7 @@ bootstrapKernelFieldErrors <- function(result, B = 500, chunk_size = nrow(result
     # Assumes createCustomProgressBar is available
     show_progress = !exists("DEBUG") || !DEBUG
     if (show_progress) {
-        cat("Running bootstrap with", B, "replicates (Type: ", result$type.est, ")...\n", sep="")
+        cat("Running bootstrap with ", B, " replicates (Type: ", result$type.est, ")...\n", sep="")
         pb = createCustomProgressBar(min = 0, max = B)
     } else {
         cat("Starting bootstrap with", B, "replicates (Type: ", result$type.est, ")...\n", sep="")

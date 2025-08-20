@@ -33,7 +33,8 @@ runPanelVFAnalysis <- function(X,
                                adaptive = FALSE,
                                hOpt = FALSE,
                                alphaOpt = FALSE,
-                               h = NULL) {
+                               h = NULL,
+                               alpha = 0.5) {
 
     # --- Basic checks ---
     if (length(dim(X)) != 3 || dim(X)[2] != 2) {
@@ -81,23 +82,26 @@ runPanelVFAnalysis <- function(X,
 
     } else {
         # 2) Standard VF Estimation (no FE/TE)
-        if (show_progress) pb$update(2, paste("Estimate VF (", estimation_method, if(adaptive) " adaptive" else "", ")", sep=""))
+        if (show_progress) {
+            pb$update(2, paste("Estimate VF (", estimation_method, if(adaptive) " adaptive" else "", ")", sep=""))
+            if(hOpt || alphaOpt) cat("\n") # Add newline before optimization progress starts
+        }
         
         # Prepare data for standard VF functions
-        X0 <- X[, , 1:(nT - 1)]
+        X0 <- aperm(X[, , 1:(nT - 1), drop=FALSE], c(1, 3, 2))
         dim(X0) <- c(nObs * (nT - 1), 2)
-        X1 <- X[, , 2:nT]
+        X1 <- aperm(X[, , 2:nT, drop=FALSE], c(1, 3, 2))
         dim(X1) <- c(nObs * (nT - 1), 2)
 
         if (estimation_method == "LL") {
             if (adaptive) {
-                vf_results <- LLfieldAdaptive(X0, X1, x = x, nEval = nEval, kernel.type = kernel.type, method.h = method.h, h = h, chunk_size = chunk_size, hOpt = hOpt, alphaOpt = alphaOpt)
+                vf_results <- LLfieldAdaptive(X0, X1, x = x, nEval = nEval, kernel.type = kernel.type, method.h = method.h, h = h, chunk_size = chunk_size, hOpt = hOpt, alphaOpt = alphaOpt, alpha = alpha)
             } else {
                 vf_results <- LLfield(X0, X1, x = x, nEval = nEval, kernel.type = kernel.type, method.h = method.h, h = h, chunk_size = chunk_size, hOpt = hOpt)
             }
         } else if (estimation_method == "NW") {
             if (adaptive) {
-                vf_results <- NWfieldAdaptive(X0, X1, x = x, nEval = nEval, kernel.type = kernel.type, method.h = method.h, h = h, chunk_size = chunk_size, hOpt = hOpt, alphaOpt = alphaOpt)
+                vf_results <- NWfieldAdaptive(X0, X1, x = x, nEval = nEval, kernel.type = kernel.type, method.h = method.h, h = h, chunk_size = chunk_size, hOpt = hOpt, alphaOpt = alphaOpt, alpha = alpha)
             } else {
                 vf_results <- NWfield(X0, X1, x = x, nEval = nEval, kernel.type = kernel.type, method.h = method.h, h = h, chunk_size = chunk_size, hOpt = hOpt)
             }
@@ -111,7 +115,10 @@ runPanelVFAnalysis <- function(X,
     }
 
     # 3) Bootstrap
-    if (show_progress) pb$update(3, paste("Bootstrap B=", bootstrap_B, sep = ""))
+    if (show_progress) {
+        pb$update(3, paste("Bootstrap B=", bootstrap_B, sep = ""))
+        cat("\n") # Add newline before bootstrap progress starts
+    }
     if(FE || TE) {
         bootstrap_samples <- bootstrapPanelVF(panel_vf_results, B = bootstrap_B)
     } else {
@@ -155,15 +162,28 @@ runPanelVFAnalysis <- function(X,
     cat("\n--- Analysis Summary ---\n")
     cat("Estimation Method:", estimation_method, if(adaptive) "(Adaptive)" else "", "\n")
     cat("Kernel Type:", kernel.type, "\n")
-    if (is.null(h)) {
+    
+    if (hOpt) {
+        h_range <- range(panel_vf_results$hGrid, na.rm = TRUE)
+        cat("Bandwidth (h) optimized over [", round(h_range[1], 4), ", ", round(h_range[2], 4), "]\n", sep = "")
+        cat("  - Optimal h found:", round(panel_vf_results$h, 4), "\n")
+    } else if (is.null(h)) {
         cat("Bandwidth (h) Method:", method.h, "\n")
         cat("  - Estimated h:", round(panel_vf_results$h, 4), "\n")
     } else {
         cat("Bandwidth (h) Provided:", round(h, 4), "\n")
     }
+
     if (adaptive) {
-        cat("Alpha:", round(panel_vf_results$alpha, 4), "\n")
+        if (alphaOpt) {
+            alpha_range <- range(panel_vf_results$alphaGrid, na.rm = TRUE)
+            cat("Alpha optimized over [", round(alpha_range[1], 4), ", ", round(alpha_range[2], 4), "]\n", sep = "")
+            cat("  - Optimal alpha found:", round(panel_vf_results$alpha, 4), "\n")
+        } else {
+            cat("Alpha:", round(panel_vf_results$alpha, 4), "\n")
+        }
     }
+    
     cat("Fixed Effects (FE):", FE, "\n")
     cat("Time Effects (TE):", TE, "\n")
     cat("Bootstrap Replicates:", bootstrap_B, "\n")
@@ -173,7 +193,7 @@ runPanelVFAnalysis <- function(X,
     return(listN(
         # Inputs
         X, nEval, FE, TE, uniform_weights, kernel.type, method.h, chunk_size,
-        bootstrap_B, p_crit, estimation_method, adaptive, hOpt, alphaOpt, h,
+        bootstrap_B, p_crit, estimation_method, adaptive, hOpt, alphaOpt, h, alpha,
         # Results
         x, panel_vf_results, bootstrap_samples,
         VF_hat, FE_hat, TE_hat,
@@ -216,7 +236,16 @@ plotPanelVFAnalysis <- function(analysis_results,
     X <- analysis_results$X
     x <- analysis_results$x
     VF_hat <- analysis_results$VF_hat
-    X0_raw <- analysis_results$panel_vf_results$X0_raw
+    
+    # Handle different result structures for X0_raw
+    if (!is.null(analysis_results$panel_vf_results$X0_raw)) {
+        X0_raw <- analysis_results$panel_vf_results$X0_raw
+    } else if (!is.null(analysis_results$panel_vf_results$X0)) {
+        X0_raw <- analysis_results$panel_vf_results$X0
+    } else {
+        stop("Could not find initial data points (X0_raw or X0) in analysis results.")
+    }
+
     VF_signif <- analysis_results$VF_signif
     
     if (is.null(analysis_results$FE_hat)) {
@@ -312,9 +341,12 @@ plotPanelVFAnalysis <- function(analysis_results,
                      angle = 15, col = "black", length = 0.05)
     graphics::points(X0_raw_plot[, 1], X0_raw_plot[, 2], pch = 19, col = "red", cex = 0.5)
     if (requireNamespace("sm", quietly = TRUE)) {
-        est.dens <- sm::sm.density(X0_raw_plot, display = "none")
-        graphics::contour(est.dens$eval.points[, 1], est.dens$eval.points[, 2], est.dens$estimate,
-                          add = TRUE, col = "purple")
+        X0_raw_plot_complete <- X0_raw_plot[complete.cases(X0_raw_plot), ]
+        if(nrow(X0_raw_plot_complete) > 1) {
+            est.dens <- sm::sm.density(X0_raw_plot_complete, display = "none")
+            graphics::contour(est.dens$eval.points[, 1], est.dens$eval.points[, 2], est.dens$estimate,
+                              add = TRUE, col = "purple")
+        }
     }
     if (save_plots) grDevices::dev.copy2pdf(file = file.path(out_dir, "VF.pdf"), width = 7, height = 7, family = "mono")
 

@@ -72,18 +72,18 @@ analysis_results <- runPanelVFAnalysis(
   TE = FALSE,
   estimation_method = "NW",
   kernel.type = "epa",
-  h = 0.6418,
+  adaptive = FALSE,
+  hOpt = FALSE,
   chunk_size = 1000,
-  method.h = NULL,
   bootstrap_B = 100 # Using a smaller B for quick testing
 )
 
 # --- Comparison against direct NWfield call ---
 
 # Create X0 and X1 from X, mimicking the wrapper's internal logic
-X0 <- X[, , 1:(nT - 1), drop=FALSE]
+X0 <- aperm(X[, , 1:(nT - 1), drop=FALSE], c(1, 3, 2))
 dim(X0) <- c(nObs * (nT - 1), 2)
-X1 <- X[, , 2:nT, drop=FALSE]
+X1 <- aperm(X[, , 2:nT, drop=FALSE], c(1, 3, 2))
 dim(X1) <- c(nObs * (nT - 1), 2)
 
 # Use the evaluation points from the wrapper for a fair comparison
@@ -95,24 +95,18 @@ est_field <- NWfield(
   X1, 
   x = x_eval, 
   kernel.type = "epa", 
-  h = 0.6418,
+  h = 1.0,
   chunk_size = 1000,
   sparse = FALSE, 
   gc = TRUE
 )
 
-# Compare the estimators
-cat("\n--- Comparison of Estimators ---\n")
-cat("Summary of differences (Wrapper - Direct):\n")
-summary(analysis_results$VF_hat - est_field$estimator)
-cat("----------------------------------\n")
-
-
 # Plot the results
 plotPanelVFAnalysis(
   analysis_results,
   component_names = c("log(GDP)", "Life Expectancy"),
-  save_plots = TRUE,
+  save_plots = FALSE,
+  rescale = FALSE,
   show_plots = TRUE
 )
 
