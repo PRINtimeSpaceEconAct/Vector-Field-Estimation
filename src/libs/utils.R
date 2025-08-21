@@ -17,8 +17,8 @@ listN <- function(...){
 #' 
 #' @return A matrix of evaluation points arranged in a grid (nEval x 2)
 defineEvalPoints <- function(X,nEval){
-    xGrid = seq(from=min(X[,1]), to=max(X[,1]), length.out=round(sqrt(nEval)))
-    yGrid = seq(from=min(X[,2]), to=max(X[,2]), length.out=round(sqrt(nEval)))
+    xGrid = seq(from=min(X[,1])*0.9, to=max(X[,1])*1.1, length.out=round(sqrt(nEval)))
+    yGrid = seq(from=min(X[,2])*0.9, to=max(X[,2])*1.1, length.out=round(sqrt(nEval)))
     x = as.matrix(expand.grid(xGrid,yGrid))
     return(x)
 }

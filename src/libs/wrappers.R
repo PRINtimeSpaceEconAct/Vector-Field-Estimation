@@ -437,3 +437,195 @@ plotPanelVFAnalysis <- function(analysis_results,
 }
 
 
+#' Performs 2D kernel density estimation on a dataframe.
+#'
+#' This is a wrapper around the `densityEst2d` and `densityEst2dAdaptive` functions.
+#' It handles data preparation from a dataframe, supports 1D and 2D variables,
+#' and returns a comprehensive results object. For 1D variables, it creates a
+#' pseudo-2D representation with a constant second dimension.
+#'
+#' @param df A data frame containing the variable(s).
+#' @param var_cols A character vector of length 1 or 2 specifying the variable columns.
+#' @param nEval Integer, total number of evaluation grid points (default 2500).
+#' @param kernel.type Kernel type for estimation (default "gauss").
+#' @param method.h Bandwidth rule (default "silverman").
+#' @param h Numeric, bandwidth parameter. If NULL, it's determined by `method.h`.
+#' @param adaptive Logical, whether to use adaptive kernel density estimation (default FALSE).
+#' @param alpha Numeric, sensitivity parameter for adaptive bandwidth (default 0.5).
+#' @param chunk_size Integer chunk size for compute functions. If NULL, defaults to `nEval`.
+#'
+#' @return A list containing all inputs, results, and intermediate objects.
+#' @export
+runDensityAnalysis <- function(df,
+                               var_cols,
+                               nEval = 2500,
+                               kernel.type = "gauss",
+                               method.h = "silverman",
+                               h = NULL,
+                               adaptive = FALSE,
+                               alpha = 0.5,
+                               chunk_size = NULL) {
+    
+    # --- Input validation and data preparation ---
+    if (!is.data.frame(df)) {
+        stop("`df` must be a data frame.")
+    }
+    if (!is.character(var_cols) || !length(var_cols) %in% c(1, 2)) {
+        stop("`var_cols` must be a character vector of length 1 or 2.")
+    }
+    if (!all(var_cols %in% colnames(df))) {
+        stop("One or more `var_cols` not found in the data frame.")
+    }
+
+    is_1d <- length(var_cols) == 1
+
+    X <- as.matrix(df[, var_cols, drop = FALSE])
+    if (is_1d) {
+        X <- cbind(X, 0)
+        colnames(X) <- c(var_cols, "dummy")
+    }
+
+    X <- X[complete.cases(X), ]
+    nObs <- nrow(X)
+    
+    if (nObs == 0) {
+        stop("No complete observations to perform density estimation.")
+    }
+
+    cat("Density analysis started.\n")
+
+    # 1) Evaluation grid
+    x <- defineEvalPoints(X, nEval)
+    
+    if (is.null(chunk_size)) {
+        chunk_size <- nEval
+    }
+
+    # 2) Density Estimation
+    if (adaptive) {
+        density_results <- densityEst2dAdaptive(X = X, x = x, nEval = nEval, kernel.type = kernel.type,
+                                               method.h = method.h, h = h, alpha = alpha, 
+                                               chunk_size = chunk_size, gc = FALSE)
+    } else {
+        density_results <- densityEst2d(X = X, x = x, nEval = nEval, kernel.type = kernel.type,
+                                       method.h = method.h, h = h,
+                                       chunk_size = chunk_size, gc = FALSE)
+    }
+
+    cat("Analysis completed.\n")
+    
+    # --- Print summary ---
+    cat("\n--- Analysis Summary ---\n")
+    cat("Estimation Method: Kernel Density", if(adaptive) "(Adaptive)" else "", "\n")
+    cat("Kernel Type:", kernel.type, "\n")
+    if (is.null(h)) {
+        cat("Bandwidth (h) Method:", method.h, "\n")
+        cat("  - Estimated h:", round(density_results$h, 4), "\n")
+    } else {
+        cat("Bandwidth (h) Provided:", round(h, 4), "\n")
+    }
+
+    if (adaptive) {
+        cat("Alpha:", round(alpha, 4), "\n")
+    }
+    cat("Input dimensionality:", if(is_1d) "1D" else "2D", "\n")
+    cat("------------------------\n\n")
+
+
+    return(listN(
+        # Inputs
+        df, var_cols, nEval, kernel.type, method.h, h, adaptive, alpha, chunk_size,
+        # Data
+        X, x, is_1d,
+        # Results
+        density_results
+    ))
+}
+
+
+#' Generates plots from a completed density analysis.
+#'
+#' This function takes the results from `runDensityAnalysis` and produces
+#' visualizations for the estimated density.
+#'
+#' @param analysis_results A list object returned by `runDensityAnalysis`.
+#' @param component_names A character vector of length 2 with names for the x and y components.
+#' @param out_dir Output directory for saved plots (default "outpics").
+#' @param save_plots Logical, save plots as PDFs to `out_dir` (default TRUE).
+#' @param show_plots Logical, open plotting devices to display plots (default TRUE).
+#'
+#' @return Invisibly returns NULL. This function is called for its side effect of generating plots.
+#' @export
+plotDensityAnalysis <- function(analysis_results,
+                                component_names = NULL,
+                                out_dir = "outpics",
+                                save_plots = TRUE,
+                                show_plots = TRUE) {
+    
+    # --- Extract data from results object ---
+    X <- analysis_results$X
+    x <- analysis_results$x
+    density_results <- analysis_results$density_results
+    is_1d <- analysis_results$is_1d
+    var_cols <- analysis_results$var_cols
+
+    if (is.null(component_names)) {
+        if (is_1d) {
+            component_names <- c(var_cols[1], "Density")
+        } else {
+            component_names <- var_cols
+        }
+    }
+    
+    if ((is_1d && length(component_names) != 2) || (!is_1d && length(component_names) != 2)) {
+        warning("`component_names` is not valid. Using default names.")
+        if(is_1d) component_names <- c(var_cols[1], "Density") else component_names <- var_cols
+    }
+
+
+    if (save_plots && !dir.exists(out_dir)) {
+        dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+
+    cat("Generating density plot...\n")
+
+    # --- Plotting ---
+    old_par <- graphics::par(no.readonly = TRUE)
+    on.exit(graphics::par(old_par))
+
+    if (show_plots) grDevices::dev.new()
+    graphics::par(family = "mono")
+
+    if (is_1d) {
+        # 1D plot
+        plot(x[, 1], density_results$estimator, type = 'l',
+             xlab = component_names[1], ylab = component_names[2],
+             main = "Estimated 1D Density")
+        graphics::rug(X[, 1])
+        graphics::grid()
+        if (save_plots) {
+            grDevices::dev.copy2pdf(file = file.path(out_dir, "density_1D.pdf"), width = 7, height = 7, family = "mono")
+        }
+
+    } else {
+        # 2D contour plot
+        x_coords <- sort(unique(x[, 1]))
+        y_coords <- sort(unique(x[, 2]))
+        z_matrix <- matrix(density_results$estimator, nrow = length(x_coords), ncol = length(y_coords))
+
+        graphics::plot(X, pch = 19, col = rgb(0,0,0,0.2), cex = 0.5,
+                       xlab = component_names[1], ylab = component_names[2],
+                       main = "Estimated 2D Density with Data Points")
+        graphics::contour(x_coords, y_coords, z_matrix, add = TRUE, col = "purple")
+        graphics::grid()
+        if (save_plots) {
+             grDevices::dev.copy2pdf(file = file.path(out_dir, "density_2D.pdf"), width = 7, height = 7, family = "mono")
+        }
+    }
+    
+    cat("Plotting finished.\n")
+    
+    invisible(NULL)
+}
+
+
