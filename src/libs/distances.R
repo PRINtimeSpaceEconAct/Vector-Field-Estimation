@@ -22,7 +22,7 @@ computeDcomponents <- function(X,x){
     z2 = MEval2 - MObs2
     
 
-    return(list(z1,z2))
+    return(listN(z1,z2))
 }
 
 

@@ -76,13 +76,13 @@ analysis_results <- runPanelVFAnalysis(panel_data,
                                      id_col = "countryCode",
                                      time_col = "Year",
                                      nEval = nEval,
-                                     FE = FALSE,
-                                     TE = FALSE,
+                                     FE = TRUE,
+                                     TE = TRUE,
                                      uniform_weights = TRUE,
                                      kernel.type = "epa",
                                      method.h = "silverman",
                                      chunk_size = 1024,
-                                     bootstrap_B = 1)
+                                     bootstrap_B = 100)
 
 plotPanelVFAnalysis(analysis_results,
                     timeInterval = timeInterval,
