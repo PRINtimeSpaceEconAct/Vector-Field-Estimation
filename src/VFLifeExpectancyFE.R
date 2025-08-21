@@ -5,6 +5,7 @@ DEBUG = FALSE
 source("src/libs/loadLib.R")
 library(dplyr)
 library(sm)
+library(plm)
 
 # con i FE ----
 timeInterval = 10 # 5 or 10 years
@@ -56,6 +57,10 @@ nObs = length(unique(data$countryCode))
 nT = length(unique(data$Year))
 nEval = 2500
 
+# Create panel data structure using plm
+panel_data <- pdata.frame(data, index = c("countryCode", "Year"))
+
+
 
 ## qui tutto stima ----
 # create array 
@@ -64,16 +69,20 @@ for (year in unique(data$Year)) {
   X[,,(year - min(data$Year))/timeInterval+1] = cbind(data$GDP[data$Year == year], data$LE[data$Year == year])
 }
 
+
 # Call the new encapsulated function from panel.R
-analysis_results <- runPanelVFAnalysis(X,
+analysis_results <- runPanelVFAnalysis(panel_data,
+                                     var_cols = c("GDP", "LE"),
+                                     id_col = "countryCode",
+                                     time_col = "Year",
                                      nEval = nEval,
-                                     FE = TRUE,
-                                     TE = TRUE,
+                                     FE = FALSE,
+                                     TE = FALSE,
                                      uniform_weights = TRUE,
                                      kernel.type = "epa",
                                      method.h = "silverman",
-                                     chunk_size = 512,
-                                     bootstrap_B = 100)
+                                     chunk_size = 1024,
+                                     bootstrap_B = 1)
 
 plotPanelVFAnalysis(analysis_results,
                     timeInterval = timeInterval,

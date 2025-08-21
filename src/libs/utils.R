@@ -311,3 +311,128 @@ calculateAICc <- function(X0, X1, X1Hat, lambda, Nobs, kernelFunction, method,
     return(listN(AICc, CovDet, trH, freedom))
 }
 
+#' Converts a panel data frame to a 3D array
+#'
+#' This function reshapes a data frame in long panel format to a 3D array
+#' of dimensions (n_individuals, n_variables, n_time_periods). It assumes
+#' a balanced panel.
+#'
+#' @param panel_df A data frame in long format.
+#' @param var_cols A character vector of column names for the variables to include in the array.
+#' @param id_col A string specifying the name of the individual identifier column.
+#' @param time_col A string specifying the name of the time identifier column.
+#'
+#' @return A 3D array with the panel data, with dimensions corresponding to individuals, variables, and time.
+#' @import plm
+panel_df_to_array <- function(panel_df, var_cols, id_col, time_col) {
+  # Ensure plm package is available
+  if (!requireNamespace("plm", quietly = TRUE)) {
+    stop("Package 'plm' is required for this function but is not installed.")
+  }
+  
+  # 1. Check: Must have exactly two variables.
+  if (length(var_cols) != 2) {
+    stop("This function is designed for 2D vector fields and requires exactly two variables in `var_cols`.")
+  }
+  
+  # 2. Check: No missing values in the specified variable columns.
+  if (any(is.na(panel_df[, var_cols]))) {
+    stop("Missing values (NA/NaN) detected in `var_cols`. Please fill or remove them before conversion.")
+  }
+  
+  # Create pdata.frame for plm checks. This also checks for duplicate (id, time) pairs.
+  p_df <- plm::pdata.frame(panel_df, index = c(id_col, time_col), drop.index = FALSE)
+  
+  # 3. Check: The panel must be balanced using plm.
+  if (!plm::is.pbalanced(p_df)) {
+    stop("The panel data is unbalanced. Each individual must have an observation for each time point. Consider using `plm::make.pbalanced`.")
+  }
+  
+  # 4. Check: Time intervals must be equally spaced.
+  time_points <- sort(unique(panel_df[[time_col]]))
+  
+  # Attempt to convert time column to numeric if it isn't already
+  if (!is.numeric(time_points)) {
+    numeric_time_points <- suppressWarnings(as.numeric(as.character(time_points)))
+    if (any(is.na(numeric_time_points))) {
+      stop("Time column contains non-numeric values and could not be converted for interval checking.")
+    }
+    time_points <- numeric_time_points
+  }
+  
+  if (length(time_points) > 1) {
+    intervals <- diff(time_points)
+    if (length(unique(intervals)) > 1) {
+      stop("Time intervals are not equally spaced. All time steps must be of the same duration.")
+    }
+  }
+  
+  # Get dimensions
+  ids <- sort(unique(panel_df[[id_col]]))
+  nObs <- length(ids)
+  nT <- length(time_points)
+  nVars <- length(var_cols)
+  
+  # Create the array with named dimensions for clarity
+  X <- array(NA, 
+             dim = c(nObs, nVars, nT), 
+             dimnames = list(as.character(ids), var_cols, as.character(time_points)))
+  
+  # Populate the array efficiently
+  for (t_idx in 1:nT) {
+    time_val <- time_points[t_idx]
+    
+    # Subset data for the current time point
+    time_slice <- panel_df[panel_df[[time_col]] == time_val, ]
+    
+    # Order the slice by ID to ensure correct assignment into the array
+    time_slice_ordered <- time_slice[match(ids, time_slice[[id_col]]), ]
+    
+    X[, , t_idx] <- as.matrix(time_slice_ordered[, var_cols])
+  }
+  
+  return(X)
+}
+
+#' Processes input when two dataframes are provided for direct X0, X1 comparison.
+#'
+#' This function is called by `runPanelVFAnalysis` when `panel_df` is a list of
+#' two dataframes. It validates the input and prepares the `X0`, `X1`, and a
+#' compatible `X` array for the non-panel estimation workflow.
+#'
+#' @param panel_df A list containing two dataframes of the same dimensions.
+#' @param var_cols A character vector of column names for the variables.
+#'
+#' @return A list containing:
+#'   \item{X0}{A matrix of initial states from the first dataframe.}
+#'   \item{X1}{A matrix of final states from the second dataframe.}
+#'   \item{X}{A placeholder 3D array for compatibility with downstream functions.}
+#'   \item{dims}{Dimensions of the placeholder X array.}
+#'   \item{nObs}{Number of observations.}
+#'   \item{nT}{Number of time points (always 2 in this case).}
+#'   \item{X_unrolled}{The X0 matrix, used for defining evaluation points.}
+handle_two_df_input <- function(panel_df, var_cols) {
+    df0 <- panel_df[[1]]
+    df1 <- panel_df[[2]]
+
+    if (!identical(dim(df0), dim(df1))) {
+        stop("The two dataframes provided in panel_df must have the same dimensions.")
+    }
+
+    if (!all(var_cols %in% colnames(df0)) || !all(var_cols %in% colnames(df1))) {
+        stop("var_cols not found in both dataframes.")
+    }
+
+    X0 <- as.matrix(df0[, var_cols])
+    X1 <- as.matrix(df1[, var_cols])
+
+    # Create a placeholder X for compatibility.
+    X <- array(c(X0, X1), dim = c(nrow(X0), 2, 2))
+    dims <- dim(X)
+    nObs <- dims[1]
+    nT <- dims[3]
+    X_unrolled <- X0 # For eval points, use the starting points.
+
+    return(listN(X0, X1, X, dims, nObs, nT, X_unrolled))
+}
+

@@ -64,18 +64,26 @@ for (year in unique(data$Year)) {
   X[,,(year - min(data$Year))/timeInterval+1] = cbind(data$GDP[data$Year == year], data$LE[data$Year == year])
 }
 
+panel_data <- pdata.frame(data, index = c("countryCode", "Year"))
+
+
 # Run the analysis with a basic Nadaraya-Watson estimator
 analysis_results <- runPanelVFAnalysis(
-  X = X,
+  panel_data,
+  var_cols = c("GDP", "LE"),
+  id_col = "countryCode",
+  time_col = "Year",
   nEval = 2500,
   FE = FALSE,
   TE = FALSE,
   estimation_method = "NW",
   kernel.type = "epa",
+  h = 1.0,
+  method.h = NULL,
   adaptive = FALSE,
   hOpt = FALSE,
   chunk_size = 1000,
-  bootstrap_B = 100 # Using a smaller B for quick testing
+  bootstrap_B = 1 # Using a smaller B for quick testing
 )
 
 # --- Comparison against direct NWfield call ---
@@ -100,6 +108,9 @@ est_field <- NWfield(
   sparse = FALSE, 
   gc = TRUE
 )
+
+est_field$estimator - analysis_results$VF_hat
+
 
 # Plot the results
 plotPanelVFAnalysis(

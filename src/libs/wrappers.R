@@ -6,7 +6,10 @@
 #' run once, and the plots to be generated or customized separately using
 #' `plotPanelVFAnalysis`.
 #'
-#' @param X 3D numeric array of size nObs x 2 x nT (e.g., log-GDP/log-LE).
+#' @param panel_df A data frame containing the panel data.
+#' @param var_cols A character vector of length 2 specifying the variable columns (e.g., c("log_GDP", "log_LE")).
+#' @param id_col A character string specifying the country/region identifier column.
+#' @param time_col A character string specifying the time column.
 #' @param nEval Integer, total number of evaluation grid points (default 2500).
 #' @param FE Logical, include fixed effects in within transform (default TRUE).
 #' @param TE Logical, include time effects in within transform (default TRUE).
@@ -14,12 +17,15 @@
 #' @param kernel.type Kernel type for estimation (default "epa").
 #' @param method.h Bandwidth rule (default "silverman").
 #' @param chunk_size Integer chunk size for compute functions (default 512).
-#' @param bootstrap_B Integer, number of bootstrap replicates (default 100).
+#' @param bootstrap_B Integer, number of bootstrap replicates (default 100). If NULL or <= 1, bootstrap is skipped.
 #' @param p_crit Numeric, significance level for directional significance (default 0.05).
 #'
-#' @return A list containing all estimation and bootstrap results.
+#' @return A list containing all inputs, results, and intermediate objects.
 #' @export
-runPanelVFAnalysis <- function(X,
+runPanelVFAnalysis <- function(panel_df,
+                               var_cols,
+                               id_col,
+                               time_col,
                                nEval = 2500,
                                FE = TRUE,
                                TE = TRUE,
@@ -36,33 +42,47 @@ runPanelVFAnalysis <- function(X,
                                h = NULL,
                                alpha = 0.5) {
 
-    # --- Basic checks ---
-    if (length(dim(X)) != 3 || dim(X)[2] != 2) {
-        stop("X must be a 3D array with second dimension equal to 2 (nObs x 2 x nT).")
-    }
-    dims <- dim(X)
-    nObs <- dims[1]
-    nT <- dims[3]
+    is_two_df_case <- is.list(panel_df) && length(panel_df) == 2 && all(sapply(panel_df, is.data.frame))
 
-    # --- Top-level progress bar over main stages ---
-    show_progress <- !exists("DEBUG") || !DEBUG
-    if (show_progress) {
-        cat("Starting panel vector field analysis...\n")
-        pb <- createCustomProgressBar(min = 0, max = 4)
+    if (is_two_df_case) {
+        if (FE || TE) {
+            warning("Two dataframes provided. Forcing FE=FALSE and TE=FALSE for this mode.")
+        }
+        FE <- FALSE
+        TE <- FALSE
+
+        two_df_data <- handle_two_df_input(panel_df, var_cols)
+        X0 <- two_df_data$X0
+        X1 <- two_df_data$X1
+        X <- two_df_data$X
+        dims <- two_df_data$dims
+        nObs <- two_df_data$nObs
+        nT <- two_df_data$nT
+        X_unrolled <- two_df_data$X_unrolled
+
     } else {
-        cat("Panel vector field analysis started.\n")
+        # Convert panel dataframe to 3D array
+        X <- panel_df_to_array(panel_df = panel_df, 
+                                 var_cols = var_cols, 
+                                 id_col = id_col, 
+                                 time_col = time_col)
+        # --- Basic checks ---
+        dims <- dim(X)
+        nObs <- dims[1]
+        nT <- dims[3]
+        X_unrolled <- aperm(X, c(1, 3, 2))
+        dim(X_unrolled) <- c(nObs * nT, 2)
     }
+
+
+    cat("Panel vector field analysis started.\n")
 
     # 1) Evaluation grid
-    if (show_progress) pb$update(1, "Build evaluation grid")
-    X_unrolled <- aperm(X, c(1, 3, 2))
-    dim(X_unrolled) <- c(nObs * nT, 2)
     x <- defineEvalPoints(X_unrolled, nEval)
 
     # --- Estimation ---
     if (FE || TE) {
         # 2) Panel Estimation
-        if (show_progress) pb$update(2, "Estimate panel vector field")
         panel_vf_results <- estimate_panel_vf(
             X = X,
             x = x,
@@ -82,16 +102,14 @@ runPanelVFAnalysis <- function(X,
 
     } else {
         # 2) Standard VF Estimation (no FE/TE)
-        if (show_progress) {
-            pb$update(2, paste("Estimate VF (", estimation_method, if(adaptive) " adaptive" else "", ")", sep=""))
-            if(hOpt || alphaOpt) cat("\n") # Add newline before optimization progress starts
-        }
         
         # Prepare data for standard VF functions
-        X0 <- aperm(X[, , 1:(nT - 1), drop=FALSE], c(1, 3, 2))
-        dim(X0) <- c(nObs * (nT - 1), 2)
-        X1 <- aperm(X[, , 2:nT, drop=FALSE], c(1, 3, 2))
-        dim(X1) <- c(nObs * (nT - 1), 2)
+        if (!is_two_df_case) {
+            X0 <- aperm(X[, , 1:(nT - 1), drop=FALSE], c(1, 3, 2))
+            dim(X0) <- c(nObs * (nT - 1), 2)
+            X1 <- aperm(X[, , 2:nT, drop=FALSE], c(1, 3, 2))
+            dim(X1) <- c(nObs * (nT - 1), 2)
+        }
 
         if (estimation_method == "LL") {
             if (adaptive) {
@@ -115,32 +133,39 @@ runPanelVFAnalysis <- function(X,
     }
 
     # 3) Bootstrap
-    if (show_progress) {
-        pb$update(3, paste("Bootstrap B=", bootstrap_B, sep = ""))
-        cat("\n") # Add newline before bootstrap progress starts
-    }
-    if(FE || TE) {
-        bootstrap_samples <- bootstrapPanelVF(panel_vf_results, B = bootstrap_B)
+    run_bootstrap <- !is.null(bootstrap_B) && bootstrap_B > 1
+
+    if (run_bootstrap) {
+        if (FE || TE) {
+            bootstrap_samples <- bootstrapPanelVF(panel_vf_results, B = bootstrap_B)
+        } else {
+            # For non-panel models, we need a different bootstrap function
+            # and to structure its output to match what the rest of the script expects.
+            estimators_array <- bootstrapKernelFieldErrors(panel_vf_results, B = bootstrap_B)
+            bootstrap_samples <- list(
+                estimators_array = estimators_array,
+                FE_array = NULL,
+                TE_array = NULL
+            )
+        }
     } else {
-        # For non-panel models, we need a different bootstrap function
-        # and to structure its output to match what the rest of the script expects.
-        estimators_array <- bootstrapKernelFieldErrors(panel_vf_results, B = bootstrap_B)
-        bootstrap_samples <- list(
-            estimators_array = estimators_array,
-            FE_array = NULL,
-            TE_array = NULL
-        )
+        # Initialize with NULL to prevent errors in later steps
+        bootstrap_samples <- list(estimators_array = NULL, FE_array = NULL, TE_array = NULL)
     }
 
     # 4) Effects and significance
-    if (show_progress) pb$update(4, "Compute FE/TE and significance")
     
     if (FE || TE) {
         effects <- get_effects(panel_vf_results, X_obs = X0_raw, FE = TRUE, TE = TRUE)
         FE_hat <- effects$alpha_i
         TE_hat <- effects$gamma_t
-        FE_signif <- significanceBootstrap(FE_hat, bootstrap_samples$FE_array, p_crit = p_crit)
-        TE_signif <- significanceBootstrap(TE_hat, bootstrap_samples$TE_array, p_crit = p_crit)
+        if (run_bootstrap) {
+            FE_signif <- significanceBootstrap(FE_hat, bootstrap_samples$FE_array, p_crit = p_crit)
+            TE_signif <- significanceBootstrap(TE_hat, bootstrap_samples$TE_array, p_crit = p_crit)
+        } else {
+            FE_signif <- rep(TRUE, nrow(FE_hat))
+            TE_signif <- rep(TRUE, nrow(TE_hat))
+        }
     } else {
         # No FE/TE to compute or test
         FE_hat <- NULL
@@ -149,14 +174,13 @@ runPanelVFAnalysis <- function(X,
         TE_signif <- NULL
     }
 
-    VF_signif <- significanceBootstrap(VF_hat, bootstrap_samples$estimators_array, p_crit = p_crit)
-    
-    if (show_progress) {
-        pb$close()
-        cat("Analysis completed.\n")
+    if (run_bootstrap) {
+        VF_signif <- significanceBootstrap(VF_hat, bootstrap_samples$estimators_array, p_crit = p_crit)
     } else {
-        cat("Analysis completed.\n")
+        VF_signif <- rep(TRUE, nrow(VF_hat))
     }
+    
+    cat("Analysis completed.\n")
 
     # --- Print summary ---
     cat("\n--- Analysis Summary ---\n")
@@ -186,13 +210,14 @@ runPanelVFAnalysis <- function(X,
     
     cat("Fixed Effects (FE):", FE, "\n")
     cat("Time Effects (TE):", TE, "\n")
-    cat("Bootstrap Replicates:", bootstrap_B, "\n")
+    cat("Bootstrap Replicates:", if(run_bootstrap) bootstrap_B else 0, "\n")
     cat("Chunk Size:", chunk_size, "\n")
     cat("------------------------\n\n")
 
     return(listN(
         # Inputs
-        X, nEval, FE, TE, uniform_weights, kernel.type, method.h, chunk_size,
+        panel_df, var_cols, id_col, time_col, X,
+        nEval, FE, TE, uniform_weights, kernel.type, method.h, chunk_size,
         bootstrap_B, p_crit, estimation_method, adaptive, hOpt, alphaOpt, h, alpha,
         # Results
         x, panel_vf_results, bootstrap_samples,
