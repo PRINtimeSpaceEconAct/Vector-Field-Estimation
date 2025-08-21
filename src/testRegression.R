@@ -28,10 +28,10 @@ X_1[,2] = 0.5*X_0_Gauss[,2]     # Second component: linear transformation y = 3x
 target = 0.5*x[,1]^2
 
 # Nadaraya-Watson regression for each component
-est_comp = NWregression(X_0_Gauss, X_1[,1], x=x, chunk_size=1024, kernel.type="gauss", sparse=FALSE, gc=TRUE)
-est_comp_adaptive = NWregressionAdaptive(X_0_Gauss, X_1[,1], x=x, chunk_size=1024, kernel.type="gauss", sparse=FALSE, gc=TRUE)
-est_comp_LL = LLregression(X_0_Gauss, X_1[,1], x=x, chunk_size=1024, kernel.type="gauss", sparse=FALSE, gc=TRUE)
-est_comp_LL_adaptive = LLregressionAdaptive(X_0_Gauss, X_1[,1], x=x, chunk_size=1024, kernel.type="gauss", sparse=FALSE, gc=TRUE)
+est_comp = NWregression(X_0_Gauss, X_1[,1], x=x, chunk_size=1024, kernel.type="gauss",  gc=TRUE)
+est_comp_adaptive = NWregressionAdaptive(X_0_Gauss, X_1[,1], x=x, chunk_size=1024, kernel.type="gauss",  gc=TRUE)
+est_comp_LL = LLregression(X_0_Gauss, X_1[,1], x=x, chunk_size=1024, kernel.type="gauss",  gc=TRUE)
+est_comp_LL_adaptive = LLregressionAdaptive(X_0_Gauss, X_1[,1], x=x, chunk_size=1024, kernel.type="gauss",  gc=TRUE)
 
 # Do a scatter plot of the forecasted values
 plot_ly(x=est_comp$x[,1], y=est_comp$estimator, type="scatter", mode="markers") %>%
@@ -76,7 +76,7 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
                yaxis=list(title="Y")
            )))
 
-est_comp_adaptive = NWregressionAdaptive(X_0_Gauss, X_1[,1], x=x, kernel.type="gauss", chunk_size=1024, sparse=FALSE, gc=TRUE, alpha=0.5)
+est_comp_adaptive = NWregressionAdaptive(X_0_Gauss, X_1[,1], x=x, kernel.type="gauss", chunk_size=1024,  gc=TRUE, alpha=0.5)
 
 z_diff = target - est_comp_adaptive$estimator
 print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%

@@ -114,22 +114,22 @@ Y2 = Filtered$Y2_unrolled
 derivative_estimator_1 = compute_derivative_term(X0_raw, X0_star, x=x,
                                               kernel.type="gauss", D=NULL, 
                                               method.h="silverman", h=NULL, lambda=NULL, 
-                                              sparse=FALSE, gc=FALSE, chunk_size=512, Y=Y1_star)
+                                              gc=FALSE, chunk_size=512, Y=Y1_star)
 
 derivative_estimator_2 = compute_derivative_term(X0_raw, X0_star, x=x,
                                                  kernel.type="gauss", D=NULL,
                                                  method.h="silverman", h=NULL, lambda=NULL,
-                                                 sparse=FALSE, gc=FALSE, chunk_size=512, Y=Y2_star)
+                                                 gc=FALSE, chunk_size=512, Y=Y2_star)
 
 derivative_obs_1 = compute_derivative_term(X0_raw, X_star=X0_star[,,rep(1,nrow(X0_raw))], x=X0_raw,
                                            kernel.type="gauss", D=NULL, 
                                            method.h="silverman", h=NULL, lambda=NULL, 
-                                           sparse=FALSE, gc=FALSE, chunk_size=512, Y=Y1_star[,rep(1,nrow(Y1_star))])
+                                           gc=FALSE, chunk_size=512, Y=Y1_star[,rep(1,nrow(Y1_star))])
 
 derivative_obs_2 = compute_derivative_term(X0_raw, X_star=X0_star[,,rep(1,nrow(X0_raw))], x=X0_raw,
                                            kernel.type="gauss", D=NULL, 
                                            method.h="silverman", h=NULL, lambda=NULL, 
-                                           sparse=FALSE, gc=FALSE, chunk_size=512, Y=Y2_star[,rep(1,nrow(Y2_star))])
+                                           gc=FALSE, chunk_size=512, Y=Y2_star[,rep(1,nrow(Y2_star))])
 
 
 meanPoint = apply(X0_raw, MARGIN = c(2), FUN = sum)/((nT-1)*nObs)

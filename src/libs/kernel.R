@@ -8,7 +8,6 @@
 #' @param method.h Method for bandwidth selection (if NULL, specified h is used)
 #' @param h Bandwidth parameter (if NULL, selected by method.h)
 #' @param lambda Vector of local bandwidths for adaptive estimation (nObs)
-#' @param sparse Whether to use sparse matrices (default: FALSE)
 #' @param gc Whether to force garbage collection (default: FALSE)
 #' @param chunk_size Number of points to process at once (default: nrow(x))
 #' @param type.est Type of estimation: "density", "NW", or "LL"
@@ -24,7 +23,7 @@
 #'   \item{Hkk_values}{Vector of hat matrix diagonal values (nObs, only for LL estimation)}
 kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                              method.h=NULL, h=NULL, lambda=NULL, 
-                             sparse=FALSE, gc=FALSE, chunk_size=nrow(x), type.est=NULL, Y=NULL) {
+                             gc=FALSE, chunk_size=nrow(x), type.est=NULL, Y=NULL) {
     
     nObs = nrow(X)
     covX = cov(X)
@@ -75,7 +74,7 @@ kernelMethod <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         chunk = chunks[[i]]
         z_chunk = z[chunk, ,drop=FALSE]
         
-        if (is.null(D)){ D_chunk = computeDcomponents(Z, z_chunk, sparse=sparse) 
+        if (is.null(D)){ D_chunk = computeDcomponents(Z, z_chunk) 
         } else { D_chunk = list(z1=D$z1[,chunk], z2=D$z2[,chunk]) }
         
         # Kernel computation
@@ -181,37 +180,7 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
                     return(rep(NaN,3))
                 }
                 
-                # SVG GINV
-                # A = MDenominator[,,k]
-                # svd_A <- svd(A)
-                # U <- svd_A$u
-                # D <- diag(svd_A$d)
-                # V <- svd_A$v
-                # 
-                # # The singular values show the problem - they get incredibly small
-                # # print(svd_A$d)
-                # #>  [1] 1.664468e+00 2.871578e-01 2.305413e-02 1.134737e-03 3.655890e-05
-                # #>  [6] 7.978254e-07 1.171866e-08 1.116035e-10 6.641618e-13 2.302307e-15
-                # 
-                # # Compute the pseudoinverse of A by inverting non-tiny singular values
-                # # Set a tolerance to avoid dividing by nearly zero
-                # tol <- .Machine$double.eps
-                # d_inv <- 1 / svd_A$d
-                # d_inv[svd_A$d < tol] <- 0 # Crucial step: treat tiny values as zero
-                # D_inv <- diag(d_inv)
-                # 
-                # # A+ = V D+ U'
-                # A_pinv <- V %*% D_inv %*% t(U)
-                # sol  <- as.numeric(A_pinv %*% bConstant[,k])
-                
-                # QR
-                # A = MDenominator[,,k]
-                # sol = as.numeric(solve(qr(A, tol = 1e-32,LAPACK = FALSE), bConstant[,k]))
-
-                # GINV
-                # sol = as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k])
-                
-                # # RIDGE
+                # RIDGE
                 lambda = 1e-5 # small ridge parameter to avoid singularity
                 A = MDenominator[,,k]
                 sol = as.numeric(solve(A + lambda * diag(3), bConstant[,k]))
@@ -233,10 +202,6 @@ computeTerms <- function(distances, Y, h, detS, K_scaled, type.est){
             }
             
             # Sum Hkk over the observations in this chunk
-            # Note: The condition if (nEval_chunk <= nObs) might not be strictly necessary
-            # for the trace calculation itself, unless memory for MDenominator is an issue.
-            # AICc is usually calculated when fitting to the original data (nEval=nObs).
-            # We compute it regardless, based on the assumption x=X was intended for AICc.
             Hkk_values_chunk <- unlist(purrr::map(1:nEval_chunk, ~ calculate_Hkk(.x))) 
             
             # Return solutions and the vector of Hkk values for this chunk

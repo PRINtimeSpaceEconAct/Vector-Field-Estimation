@@ -9,7 +9,6 @@
 #' @param method.h Method for bandwidth selection (if NULL, specified h is used)
 #' @param h Bandwidth parameter (if NULL, selected by method.h)
 #' @param lambda Vector of local bandwidths for adaptive estimation (length n)
-#' @param sparse Whether to use sparse matrices (default: FALSE)
 #' @param gc Whether to force garbage collection (default: FALSE)
 #' @param chunk_size Number of points to process at once (default: nrow(x))
 #' 
@@ -22,12 +21,12 @@
 #'   \item{kernel.type}{Type of kernel function used}
 NWregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                         method.h=NULL, h=NULL, lambda = NULL, 
-                        sparse=FALSE, gc=FALSE, chunk_size=nrow(x)) {
+                        gc=FALSE, chunk_size=nrow(x)) {
 
     type.est = "NW"
     resultEst = kernelMethod(X=X,x=x,nEval=nEval,kernel.type=kernel.type,D=D,
                              method.h=method.h,h=h,lambda=lambda,
-                             sparse=sparse,gc=gc,chunk_size=chunk_size,type.est=type.est, Y=Y)
+                             gc=gc,chunk_size=chunk_size,type.est=type.est, Y=Y)
     
     return(resultEst)
 }
@@ -43,7 +42,6 @@ NWregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 #' @param method.h Method for bandwidth selection (if NULL, specified h is used)
 #' @param h Bandwidth parameter (if NULL, selected by method.h)
 #' @param lambda Vector of local bandwidths (if NULL, computed internally)
-#' @param sparse Whether to use sparse matrices (default: FALSE)
 #' @param gc Whether to force garbage collection (default: FALSE)
 #' @param chunk_size Number of points to process at once (default: nrow(x))
 #' @param alpha Sensitivity parameter for adaptive bandwidth (default: 0.5)
@@ -58,16 +56,16 @@ NWregression <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 #'   \item{lambda}{Vector of local bandwidths used (length n)}
 NWregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                                 method.h=NULL, h=NULL, lambda=NULL,
-                                sparse=FALSE, gc=FALSE, chunk_size=nrow(x), alpha = 0.5) {
+                                gc=FALSE, chunk_size=nrow(x), alpha = 0.5) {
     
     # Get adaptive bandwidths using the density-based approach
     lambda = getLocalBandwidth(X, kernel.type=kernel.type, D=D, method.h=method.h, h=h,
-                             sparse=sparse, gc=gc, chunk_size=chunk_size, alpha = alpha)
+                             gc=gc, chunk_size=chunk_size, alpha = alpha)
     
     # Apply NW regression with adaptive bandwidths
     est = NWregression(X, Y, x=x, nEval=nEval, kernel.type=kernel.type, D=D, 
                       method.h=method.h, h=h, lambda=lambda,
-                      sparse=sparse, gc=gc, chunk_size=chunk_size)
+                      gc=gc, chunk_size=chunk_size)
     est$lambda = lambda
     return(est)
 }
@@ -84,7 +82,6 @@ NWregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", 
 #' @param method.h Method for bandwidth selection
 #' @param h Bandwidth parameter
 #' @param lambda Vector of local bandwidths for adaptive estimation (length n)
-#' @param sparse Whether to use sparse matrices
 #' @param gc Whether to force garbage collection
 #' @param chunk_size Number of points to process at once
 #' 
@@ -97,12 +94,12 @@ NWregressionAdaptive <- function(X, Y, x=NULL, nEval=2500, kernel.type="gauss", 
 #'   \item{kernel.type}{Type of kernel function used}
 #'   \item{lambda}{Vector of local bandwidths used (length n)}
 computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D, 
-                             method.h, h, lambda, sparse, gc, chunk_size) {
+                             method.h, h, lambda, gc, chunk_size) {
     
     # Estimate x-component of the vector field
     est1 = NWregression(X0, Y1, x=x, nEval=nEval, kernel.type=kernel.type, D=D,
                       method.h=method.h, h=h, lambda=lambda,
-                      sparse=sparse, gc=gc, chunk_size=chunk_size)
+                      gc=gc, chunk_size=chunk_size)
     
     # Use the evaluation points from the first estimate for the second
     x_eval = est1$x
@@ -110,7 +107,7 @@ computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D,
     # Estimate y-component of the vector field
     est2 = NWregression(X0, Y2, x=x_eval, nEval=nEval, kernel.type=kernel.type, D=D,
                       method.h=method.h, h=h, lambda=lambda,
-                      sparse=sparse, gc=gc, chunk_size=chunk_size)
+                      gc=gc, chunk_size=chunk_size)
     
     # Combine the two components into a single estimator
     estimator = cbind(est1$estimator, est2$estimator)
@@ -135,7 +132,6 @@ computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D,
 #' @param method.h Method for bandwidth selection (if NULL, specified h is used)
 #' @param h Bandwidth parameter (if NULL, selected by method.h)
 #' @param lambda Vector of local bandwidths (not used in standard NW field)
-#' @param sparse Whether to use sparse matrices (default: FALSE)
 #' @param gc Whether to force garbage collection (default: FALSE)
 #' @param chunk_size Number of points to process at once (default: nrow(x))
 #' @param hOpt Whether to optimize the bandwidth parameter (default: FALSE)
@@ -156,7 +152,7 @@ computeNWFieldComponents <- function(X0, Y1, Y2, x, nEval, kernel.type, D,
 #'   \item{hGrid}{Vector of bandwidth values used for optimization (only if hOpt=TRUE)}
 NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                     method.h=NULL, h=NULL, lambda=NULL,
-                    sparse=FALSE, gc=FALSE, chunk_size=nrow(x),
+                    gc=FALSE, chunk_size=nrow(x),
                     hOpt = FALSE, nGridh = 10) {
 
     # Calculate differences for vector field
@@ -202,7 +198,7 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
             est_components_i = computeNWFieldComponents(X0, Y1, Y2, x=X0, nEval=optParams$Nobs,
                                                         kernel.type=kernel.type, D=D,
                                                         method.h=method.h, h=hi, lambda=NULL,
-                                                        sparse=sparse, gc=gc, chunk_size=chunk_size) 
+                                                        gc=gc, chunk_size=chunk_size) 
 
             X1Hat_i = X0 + est_components_i$estimator
 
@@ -250,7 +246,7 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
     final_est_components = computeNWFieldComponents(X0, Y1, Y2, x=final_x, nEval=nEval,
                                                    kernel.type=kernel.type, D=D,
                                                    method.h=method.h, h=h, lambda=NULL,
-                                                   sparse=sparse, gc=gc, chunk_size=final_chunk_size)
+                                                   gc=gc, chunk_size=final_chunk_size)
     # Construct result object
     result = list(x = final_est_components$x_eval,
                    X0 = X0, X1 = X1,
@@ -282,7 +278,6 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 #' @param method.h Method for bandwidth selection (if NULL, specified h is used)
 #' @param h Bandwidth parameter (if NULL, selected by method.h)
 #' @param lambda Vector of local bandwidths (if NULL, computed internally) (length n)
-#' @param sparse Whether to use sparse matrices (default: FALSE)
 #' @param gc Whether to force garbage collection (default: FALSE)
 #' @param chunk_size Number of points to process at once (default: nrow(x))
 #' @param alpha Sensitivity parameter for adaptive bandwidth (default: 0.5)
@@ -308,7 +303,7 @@ NWfield <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
 #'   \item{alphaGrid}{Vector of alpha values used for optimization (only if alphaOpt=TRUE)}
 NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
                             method.h=NULL, h=NULL, lambda=NULL,
-                            sparse=FALSE, gc=FALSE, chunk_size=nrow(x), alpha = 0.5,
+                            gc=FALSE, chunk_size=nrow(x), alpha = 0.5,
                             hOpt = FALSE, nGridh = 10, alphaOpt = FALSE, nGridAlpha = 5) {
     
     # Calculate differences for vector field
@@ -368,7 +363,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
             # Pilot density calculation (only depends on h)
             # Pass method.h=NULL since h is explicitly given by hi
             pilotDensity = densityEst2d(X0, x=X0, nEval=optParams$Nobs, kernel.type=kernel.type,
-                                       D=D, method.h=NULL, h=hi, sparse=sparse,
+                                       D=D, method.h=NULL, h=hi,
                                        gc=gc, chunk_size=chunk_size)
 
             # Calculate geometric mean directly without any checks
@@ -395,7 +390,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
                 est_components_ij = computeNWFieldComponents(X0, Y1, Y2, x=X0, nEval=optParams$Nobs,
                                                              kernel.type=kernel.type, D=D,
                                                              method.h=NULL, h=hi, lambda=lambda_ij,
-                                                             sparse=sparse, gc=gc, chunk_size=chunk_size)
+                                                             gc=gc, chunk_size=chunk_size)
                     
                 X1Hat_ij = X0 + est_components_ij$estimator
                 
@@ -458,7 +453,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
         # current_h and current_alpha were set after calling setupOptimizationParameters
         # Pass method.h=NULL as h is explicitly known
         final_lambda = getLocalBandwidth(X0, kernel.type=kernel.type, D=D, method.h=NULL, h=current_h,
-                            sparse=sparse, gc=gc, chunk_size=chunk_size, alpha = current_alpha)
+                            gc=gc, chunk_size=chunk_size, alpha = current_alpha)
     }
 
     # Final estimation using the chosen/optimized parameters
@@ -469,7 +464,7 @@ NWfieldAdaptive <- function(X0, X1, x=NULL, nEval=2500, kernel.type="gauss", D=N
     final_est_components = computeNWFieldComponents(X0, Y1, Y2, x=final_x, nEval=nEval,
                                                    kernel.type=kernel.type, D=D,
                                                    method.h=NULL, h=current_h, lambda=final_lambda,
-                                                   sparse=sparse, gc=gc, chunk_size=final_chunk_size)
+                                                   gc=gc, chunk_size=final_chunk_size)
     # Construct result object
     result = list(x = final_est_components$x_eval,
                    X0 = X0, X1 = X1,

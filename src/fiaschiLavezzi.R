@@ -71,11 +71,11 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 
 est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
                                      chunk_size=1000,
-                                     sparse=FALSE, gc=TRUE,
+                                     gc=TRUE,
                                      hOpt = TRUE, alphaOpt = TRUE)
 # est_field_adaptive = NWfieldAdaptive(X0, X1, x=x, kernel.type="epa",
 #                                      chunk_size=1000,h=0.1,
-#                                      sparse=FALSE, gc=TRUE, 
+#                                      gc=TRUE, 
 #                                      hOpt = FALSE, alphaOpt = FALSE)
 
 # bootstrap

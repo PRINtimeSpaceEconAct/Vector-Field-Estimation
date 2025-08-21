@@ -105,7 +105,6 @@ est_field <- NWfield(
   kernel.type = "epa", 
   h = 1.0,
   chunk_size = 1000,
-  sparse = FALSE, 
   gc = TRUE
 )
 

@@ -44,10 +44,10 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 # stima
 est_field = LLfield(X0, X1, x=x, kernel.type="epa",method.h = "sj",
                                      chunk_size=1000,
-                                     sparse=FALSE, gc=TRUE)
+                                     gc=TRUE)
 # est_field = NWfield(X0, X1, x=x, kernel.type="epa",h=1.0,
 #                     chunk_size=1000,
-#                     sparse=FALSE, gc=TRUE)
+#                      gc=TRUE)
 
 
 # plots ----

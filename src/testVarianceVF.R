@@ -44,9 +44,7 @@ VF <- function(X){
 h = 0.14724848498449
 X1 = X0 + t(apply(X0, 1, VF)) + mvrnorm(nObs, mu=c(0,0),Sigma = 1*diag(2)) %*% sqrtm(SIGMA)
 t0 = Sys.time()
-est_field = NWfield(X0, X1, x=x, kernel.type="gauss",h = 0.14724848498449,
-                                     chunk_size=1000,
-                                     sparse=FALSE, gc=TRUE)
+est_field = NWfield(X0, X1, x=x, kernel.type="gauss",h = 0.14724848498449,chunk_size=1000,gc=TRUE)
 t = Sys.time() - t0
 
 # stima MC
@@ -59,7 +57,7 @@ for(i in 1:nMC){
     X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 1*diag(2))
     X1 = X0 + t(apply(X0, 1, VF)) + mvrnorm(nObs, mu=c(0,0),Sigma = 1*diag(2)) %*% sqrtm(SIGMA)    
     
-    est_field = NWfield(X0, X1, x=x, kernel.type="gauss",h = 0.14724848498449,chunk_size=1000,sparse=FALSE, gc=TRUE)    
+    est_field = NWfield(X0, X1, x=x, kernel.type="gauss",h = 0.14724848498449,chunk_size=1000,gc=TRUE)    
     VFEstEval1[i,] = est_field$estimator[1,]
     VFEstEval2[i,] = est_field$estimator[2,]
 }

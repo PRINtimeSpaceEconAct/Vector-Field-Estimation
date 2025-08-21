@@ -37,14 +37,14 @@ print("================================================")
 print("Estimating a standard Gaussian")
 bandwidth = 0.5
 print(paste(" Gaussian kernel", "bandwidth =", bandwidth))
-estGaussian <- densityEst2d(X_0_Gauss, x=x, h=bandwidth, kernel.type = "gauss", sparse=FALSE, gc=TRUE)
+estGaussian <- densityEst2d(X_0_Gauss, x=x, h=bandwidth, kernel.type = "gauss", gc=TRUE)
 estGaussian.sm <- sm.density(X_0_Gauss, h=c(bandwidth, bandwidth), eval.points=x, eval.grid=FALSE, nbins=0)
 print(paste("Maximum absolute difference between sm and custom:", max(abs(estGaussian$estimator - estGaussian.sm$estimate))))
 # Test adaptive bandwidth density estimation
 print("================================================")
 print("Estimating a standard Gaussian with adaptive bandwidth")
 alpha = 0.5
-estAdaptive <- densityEst2dAdaptive(X_0_Gauss, x=x, kernel.type="gauss", sparse=FALSE, gc=TRUE, chunk_size=1024, alpha=alpha)
+estAdaptive <- densityEst2dAdaptive(X_0_Gauss, x=x, kernel.type="gauss", gc=TRUE, chunk_size=1024, alpha=alpha)
 print(paste("Maximum absolute difference between true and adaptive estimate:", max(abs(trueGaussian - estAdaptive$estimator))))
 
 z_diff = trueGaussian - estAdaptive$estimator
@@ -109,7 +109,7 @@ print(plot_ly(x=X_0_Bimodal[,1], y=X_0_Bimodal[,2], type="scatter", mode="marker
                  yaxis=list(title="Y")))
 
 print("Estimating the bimodal density")
-estBimodal <- densityEst2d(X_0_Bimodal, x=x, kernel="gauss", sparse=FALSE, gc=TRUE)
+estBimodal <- densityEst2d(X_0_Bimodal, x=x, kernel="gauss", gc=TRUE)
 # # Plot the estimated density
 # print(plot_ly(x=x[,1], y=x[,2], z=estBimodal$estimator, intensity=estBimodal$estimator, type="mesh3d") %>%
 #     layout(title="Estimate: Mixture of Two Gaussians - Fixed Bandwidth Estimate",
@@ -131,7 +131,7 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
 # Estimate the density with an adaptive bandwidth
 print("Estimating the bimodal density with adaptive bandwidth")
 alpha = 0.5
-estBimodalAdaptive <- densityEst2dAdaptive(X_0_Bimodal, x=x, kernel.type="gauss", sparse=FALSE, gc=TRUE, chunk_size=1024, alpha=alpha)
+estBimodalAdaptive <- densityEst2dAdaptive(X_0_Bimodal, x=x, kernel.type="gauss", gc=TRUE, chunk_size=1024, alpha=alpha)
 # # Plot the estimated density
 # print(plot_ly(x=x[,1], y=x[,2], z=estBimodalAdaptive$estimator, intensity=estBimodalAdaptive$estimator, type="mesh3d") %>%
 #     layout(title="Estimated Bimodal Density with Adaptive Bandwidth",
@@ -200,7 +200,7 @@ print(plot_ly(x=X_0_Trimodal[,1], y=X_0_Trimodal[,2], type="scatter", mode="mark
                  yaxis=list(title="Y")))
 
 print("Estimating the trimodal density")
-estTrimodal <- densityEst2d(X_0_Trimodal, x=x, kernel="gauss", sparse=FALSE, gc=TRUE)
+estTrimodal <- densityEst2d(X_0_Trimodal, x=x, kernel="gauss", gc=TRUE)
 # Plot the estimated density
 # print(plot_ly(x=x[,1], y=x[,2], z=estTrimodal$estimator, intensity=estTrimodal$estimator, type="mesh3d") %>%
 #     layout(title="Difference: Mixture of Three Gaussians - Fixed Bandwidth Estimate",
@@ -222,7 +222,7 @@ print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
 # Estimate the density with an adaptive bandwidth
 print("Estimating the trimodal density with adaptive bandwidth")
 alpha = 0.5
-estTrimodalAdaptive <- densityEst2dAdaptive(X_0_Trimodal, x=x, kernel.type="gauss", sparse=FALSE, gc=TRUE, chunk_size=1024, alpha=alpha)
+estTrimodalAdaptive <- densityEst2dAdaptive(X_0_Trimodal, x=x, kernel.type="gauss", gc=TRUE, chunk_size=1024, alpha=alpha)
 # # Plot the estimated density
 # print(plot_ly(x=x[,1], y=x[,2], z=estTrimodalAdaptive$estimator, intensity=estTrimodalAdaptive$estimator, type="mesh3d") %>%
 #     layout(title="Estimated Trimodal Density with Adaptive Bandwidth",

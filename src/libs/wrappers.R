@@ -94,7 +94,6 @@ runPanelVFAnalysis <- function(panel_df,
             method.h = method.h,
             h = h,
             chunk_size = chunk_size,
-            sparse = FALSE,
             gc = FALSE
         )
         VF_hat <- panel_vf_results$estimator

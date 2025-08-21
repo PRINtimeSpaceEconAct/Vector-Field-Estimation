@@ -37,27 +37,27 @@ x = as.matrix(expand.grid(xGrid, yGrid))
 
 # est_field_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="epa",
 #                                      chunk_size=3000,
-#                                      sparse=FALSE, gc=TRUE, h = 0.1519322, alpha = 0.225)
+#                                      gc=TRUE, h = 0.1519322, alpha = 0.225)
 
 # est_field_adaptive = LLfieldAdaptive(X0, X1, x=x, kernel.type="epa",
 #                                      chunk_size=3000,
-#                                      sparse=FALSE, gc=TRUE, h = 0.1, alpha = 0.225)
+#                                      gc=TRUE, h = 0.1, alpha = 0.225)
 
 # est_field_adaptiveLL = LLfield(X0, X1, x=x, kernel.type="epa",
 #                                      chunk_size=3000,
-#                                      sparse=FALSE, gc=TRUE, h = 0.1)
+#                                       gc=TRUE, h = 0.1)
 # 
 # est_field_adaptiveNW = NWfield(X0, X1, x=x, kernel.type="epa",
 #                              chunk_size=3000,
-#                              sparse=FALSE, gc=TRUE, h = 0.1)
+#                               gc=TRUE, h = 0.1)
 
 est_field_adaptiveLL = LLfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
                                      chunk_size=3000,
-                                     sparse=FALSE, gc=TRUE, hOpt = TRUE, alphaOpt = TRUE)
+                                     gc=TRUE, hOpt = TRUE, alphaOpt = TRUE)
 
 est_field_adaptiveNW = NWfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h = "silverman",
                                      chunk_size=1000,
-                                     sparse=FALSE, gc=TRUE,
+                                     gc=TRUE,
                                      hOpt = TRUE, alphaOpt = TRUE)
 
 

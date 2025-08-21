@@ -121,7 +121,6 @@ bootstrapKernelFieldErrors <- function(result, B = 500, chunk_size = nrow(result
             current_lambda = getLocalBandwidth(X0_star, kernel.type=kernel.type, D=NULL,
                                      method.h=NULL, # Explicitly pass h_opt
                                      h=h_opt,
-                                     sparse=FALSE, # Assuming defaults consistent with NW/LL field functions
                                      gc=FALSE,
                                      chunk_size=Nobs, # Use Nobs for density calculation over resampled data
                                      alpha = alpha_opt)
@@ -132,7 +131,7 @@ bootstrapKernelFieldErrors <- function(result, B = 500, chunk_size = nrow(result
         # Pass chunk_size for the estimation step itself
         est_star = computeFieldComponents(X0 = X0_star, Y1 = Y1_star, Y2 = Y2_star, x = x_eval,
             nEval = nEvalPoints, kernel.type = kernel.type, D = NULL, method.h = NULL,
-            h = h_opt, lambda = current_lambda, sparse = FALSE, gc = FALSE, chunk_size = chunk_size)
+            h = h_opt, lambda = current_lambda, gc = FALSE, chunk_size = chunk_size)
 
         # Store results
         estimators_array[, , b] = est_star$estimator
@@ -168,7 +167,6 @@ bootstrapPanelVF <- function(result, B = 500) {
     kernel.type <- result$kernel.type
     method.h <- result$method.h
     chunk_size <- result$chunk_size
-    sparse <- result$sparse
     gc <- result$gc
     
     X0_raw <- result$X0_raw
@@ -215,7 +213,6 @@ bootstrapPanelVF <- function(result, B = 500) {
             kernel.type = kernel.type,
             method.h = method.h,
             chunk_size = chunk_size,
-            sparse = sparse,
             gc = gc
         )
         effects <- get_effects(est_star, X_obs = X0_raw, FE = result$FE, TE = result$TE)

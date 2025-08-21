@@ -6,7 +6,7 @@
 #' @export
 compute_weights <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                              method.h=NULL, h=NULL, lambda=NULL,
-                             sparse=FALSE, gc=FALSE, chunk_size=NULL){    
+                             gc=FALSE, chunk_size=NULL){    
     dims = dim(X)
     nObs = dims[1]
     nT = dims[3]
@@ -60,7 +60,7 @@ compute_weights <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         z_chunk = z[chunk, ,drop=FALSE]
         
         if (is.null(D)){ 
-            D_chunk = computeDcomponents(Z, z_chunk, sparse=sparse) 
+            D_chunk = computeDcomponents(Z, z_chunk) 
         } else { 
             D_chunk = list(z1=D$z1[,chunk], z2=D$z2[,chunk]) 
         }
@@ -203,7 +203,6 @@ within_transform <- function(X,
                              method.h = NULL,
                              h = NULL,
                              lambda = NULL,
-                             sparse = FALSE,
                              gc = FALSE,
                              chunk_size = NULL) {
 
@@ -231,7 +230,6 @@ within_transform <- function(X,
                                      method.h = method.h,
                                      h = h,
                                      lambda = lambda,
-                                     sparse = sparse,
                                      gc = gc,
                                      chunk_size = chunk_size)
         omega_a_X <- weights_X$omega_a
@@ -259,7 +257,6 @@ within_transform <- function(X,
                                      method.h = method.h,
                                      h = NULL,
                                      lambda = NULL,
-                                     sparse = sparse,
                                      gc = gc,
                                      chunk_size = chunk_size)
         omega_a_Y <- weights_Y$omega_a
@@ -309,7 +306,6 @@ within_transform <- function(X,
 #' @param method.h The method for bandwidth selection.
 #' @param h The bandwidth value.
 #' @param lambda A numeric vector of observation-specific weights.
-#' @param sparse A logical indicating whether to use sparse matrices.
 #' @param gc A logical indicating whether to perform garbage collection.
 #' @param chunk_size The number of evaluation points to process in each chunk.
 #' @param Y A matrix representing the dependent variable (nObs x nEval).
@@ -317,7 +313,7 @@ within_transform <- function(X,
 #'         the bandwidth `h`, the bandwidth selection method `method.h`, and the kernel type `kernel.type`.
 compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                              method.h=NULL, h=NULL, lambda=NULL, 
-                             sparse=FALSE, gc=FALSE, chunk_size=nrow(x), Y=NULL) {
+                             gc=FALSE, chunk_size=nrow(x), Y=NULL) {
     
     nObs = nrow(X)
     covX = cov(X)
@@ -360,7 +356,7 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
         current_chunk_size = length(chunk)
         z_chunk = z[chunk, ,drop=FALSE]
         
-        if (is.null(D)){ D_chunk = computeDcomponents(Z, z_chunk, sparse=sparse) 
+        if (is.null(D)){ D_chunk = computeDcomponents(Z, z_chunk) 
         } else { D_chunk = list(z1=D$z1[,chunk], z2=D$z2[,chunk]) }
         
         # Kernel computation
@@ -458,7 +454,7 @@ compute_m <- function(X_obs_unrolled, x_eval, beta, m_0, x0, beta_0) {
     # Use computeDcomponents to get (x - X)
     # The result z1, z2 are matrices of size (N*T) x nEval
     # z1[it, e] = x[e,1] - X_unrolled[it, 1]
-    D_components <- computeDcomponents(X_obs_unrolled, x_eval, sparse = FALSE)
+    D_components <- computeDcomponents(X_obs_unrolled, x_eval)
     
     # We need (X - x), so we negate the results
     Diff1 <- -D_components$z1
@@ -525,7 +521,7 @@ compute_m0 <- function(X_obs_unrolled, Y_obs_unrolled, beta, x0, beta_0) {
     S1 <- sum(term1)
     
     # S2 = (1/NT) * sum_{j,s} beta(X_{j,s})^T sum_{i,t} (X_{i,t} - X_{j,s})
-    D_components <- computeDcomponents(X_obs_unrolled, X_obs_unrolled, sparse = FALSE)
+    D_components <- computeDcomponents(X_obs_unrolled, X_obs_unrolled)
     
     Diff1 <- -D_components$z1
     Diff2 <- -D_components$z2
@@ -559,7 +555,6 @@ compute_m0 <- function(X_obs_unrolled, Y_obs_unrolled, beta, x0, beta_0) {
 #' @param kernel.type The kernel function to be used.
 #' @param method.h The method for bandwidth selection.
 #' @param chunk_size The size of chunks for processing.
-#' @param sparse Logical, for sparse matrix calculations.
 #' @param gc Logical, for garbage collection.
 #' @return A list containing the estimated vector field `VF_hat`, the evaluation points `x`, and other intermediate results.
 #' @export
@@ -573,7 +568,6 @@ estimate_panel_vf <- function(X,
                               method.h = "silverman",
                               h = NULL,
                               chunk_size = 512,
-                              sparse = FALSE,
                               gc = FALSE) {
 
     # 1. Within transformation
@@ -581,7 +575,8 @@ estimate_panel_vf <- function(X,
                                  FE = FE, TE = TE,
                                  uniform_weights = uniform_weights, nEval_chunk = nEval,
                                  x = x, kernel.type = kernel.type,
-                                 method.h = method.h, h = h, chunk_size = chunk_size)
+                                 method.h = method.h, h = h, chunk_size = chunk_size,
+                                 gc = gc)
 
     X0_raw <- Filtered$X0_raw_unrolled
     X0_star <- Filtered$X0_star_unrolled
@@ -597,12 +592,12 @@ estimate_panel_vf <- function(X,
     derivative_estimator_1 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
                                                       kernel.type=kernel.type, D=NULL,
                                                       method.h=method.h, h=h, lambda=NULL,
-                                                      sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y1_star)
+                                                      gc=gc, chunk_size=chunk_size, Y=Y1_star)
 
     derivative_estimator_2 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
                                                       kernel.type=kernel.type, D=NULL,
                                                       method.h=method.h, h=h, lambda=NULL,
-                                                      sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y2_star)
+                                                      gc=gc, chunk_size=chunk_size, Y=Y2_star)
 
     # 3. Estimate derivatives at observed points
   
@@ -613,12 +608,12 @@ estimate_panel_vf <- function(X,
     derivative_obs_1 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
                                                 kernel.type=kernel.type, D=NULL,
                                                 method.h=method.h, h=h, lambda=NULL,
-                                                sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y1_star_obs)
+                                                gc=gc, chunk_size=chunk_size, Y=Y1_star_obs)
 
     derivative_obs_2 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
                                                 kernel.type=kernel.type, D=NULL,
                                                 method.h=method.h, h=h, lambda=NULL,
-                                                sparse=sparse, gc=gc, chunk_size=chunk_size, Y=Y2_star_obs)
+                                                gc=gc, chunk_size=chunk_size, Y=Y2_star_obs)
 
     # 4. Compute m0
     meanPoint <- colSums(X0_raw) / nrow(X0_raw)
@@ -634,7 +629,7 @@ estimate_panel_vf <- function(X,
     estimator <- cbind(VF_hat1, VF_hat2)
     h <- derivative_estimator_1$h
 
-    return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, h, chunk_size, sparse, gc,
+    return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, h, chunk_size, gc,
                  derivative_estimator_1, derivative_estimator_2, derivative_obs_1, derivative_obs_2, 
                  iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
 }
