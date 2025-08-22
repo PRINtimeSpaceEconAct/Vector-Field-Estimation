@@ -90,3 +90,96 @@ getLocalBandwidth <- function(X, kernel.type="gauss", D=NULL, method.h=NULL, h=N
 
 
 
+
+#' Performs 1D kernel density estimation
+#' 
+#' @param X Vector of input points (nObs)
+#' @param x Vector of evaluation points (nEval, if NULL, generated internally)
+#' @param nEval Number of evaluation points if x is NULL (default: 100)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Pre-computed distance components (if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param lambda Vector of local bandwidths for adaptive estimation (nEval)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: length(x))
+#' 
+#' @return A list containing density estimation results and parameters:
+#'   \item{estimator}{Vector of density estimates at evaluation points (nEval)}
+#'   \item{x}{Vector of evaluation points (nEval)}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{lambda}{Vector of local bandwidths used, if applicable (nObs)}
+densityEst1d <- function(X, x=NULL, nEval=100, kernel.type="gauss", D=NULL,
+                          method.h=NULL, h=NULL, lambda=NULL,
+                          gc=FALSE, chunk_size=if (is.null(x)) nEval else length(x)) {
+
+    type.est = "density"
+    resultEst = kernelMethod1d(X=X,x=x,nEval=nEval,kernel.type=kernel.type,D=D,
+                             method.h=method.h,h=h,lambda=lambda,
+                             gc=gc,chunk_size=chunk_size,type.est=type.est)
+    return(resultEst)
+
+}
+
+#' Performs 1D kernel density estimation with adaptive bandwidth
+#'
+#' @param X Vector of input points (nObs)
+#' @param x Vector of evaluation points (nEval, if NULL, generated internally)
+#' @param nEval Number of evaluation points if x is NULL (default: 100)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Pre-computed distance components (if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: length(X))
+#' @param alpha Sensitivity parameter for adaptive bandwidth (default: 0.5)
+#'
+#' @return A list containing density estimation results with adaptive bandwidths:
+#'   \item{estimator}{Vector of density estimates at evaluation points (nEval)}
+#'   \item{x}{Vector of evaluation points (nEval)}
+#'   \item{h}{Bandwidth parameter used}
+#'   \item{method.h}{Method used for bandwidth selection}
+#'   \item{kernel.type}{Type of kernel function used}
+#'   \item{lambda}{Vector of local bandwidths used (nObs)}
+densityEst1dAdaptive <- function(X, x=NULL, nEval=100, kernel.type="gauss", D=NULL,
+                                method.h=NULL, h=NULL,
+                                gc=FALSE, chunk_size=length(X), alpha = 0.5){
+
+    lambda = getLocalBandwidth1d(X, kernel.type=kernel.type, D=D, method.h=method.h, h=h,
+                                gc=gc, chunk_size=chunk_size, alpha = alpha)
+    est = densityEst1d(X, x=x, nEval=nEval, kernel.type=kernel.type, D=D, method.h=method.h,
+                        h=h, lambda=lambda, gc=gc, chunk_size=chunk_size)
+    return(est)
+}
+
+
+#' Calculates local bandwidths for adaptive 1D kernel estimation based on pilot density
+#'
+#' @param X Vector of input points (nObs)
+#' @param kernel.type Type of kernel function to use (default: "gauss")
+#' @param D Pre-computed distance components (if NULL, computed internally)
+#' @param method.h Method for bandwidth selection (if NULL, specified h is used)
+#' @param h Bandwidth parameter (if NULL, selected by method.h)
+#' @param gc Whether to force garbage collection (default: FALSE)
+#' @param chunk_size Number of points to process at once (default: 1024)
+#' @param alpha Sensitivity parameter for adaptive bandwidth (default: 0.5)
+#'
+#' @return Vector of local bandwidths for each input point (nObs)
+getLocalBandwidth1d <- function(X, kernel.type="gauss", D=NULL, method.h=NULL, h=NULL,
+                              gc=FALSE, chunk_size=1024, alpha = 0.5){
+    nObs = length(X)
+    nEval = nObs
+
+    pilotDensity = densityEst1d(X, x=X, nEval=nEval, kernel.type=kernel.type,
+                                D=D, method.h=method.h, h=h,
+                                gc=gc, chunk_size=chunk_size)
+    g = exp(mean(log(pilotDensity$estimator)))
+    lambda = (pilotDensity$estimator/g)^(-alpha)
+
+    return(lambda)
+}
+
+
+

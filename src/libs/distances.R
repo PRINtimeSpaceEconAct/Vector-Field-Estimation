@@ -50,3 +50,20 @@ mahalanobis <- function(z1,z2,A,den){
 }
     
 
+#' Computes distance components between data points and evaluation points for 1D data
+#'
+#' @param X Vector of data points (nObs)
+#' @param x Vector of evaluation points (nEval)
+#' @return A matrix of differences (nObs x nEval).
+computeDcomponents1d <- function(X,x){
+
+    nObs = length(X)
+    nEval = length(x)
+    
+    MObs = matrix(rep(X, nEval), nObs, nEval, byrow=FALSE)
+    MEval = matrix(rep(x, nObs), nObs, nEval, byrow=TRUE)
+
+    return(MEval - MObs)
+}
+    
+

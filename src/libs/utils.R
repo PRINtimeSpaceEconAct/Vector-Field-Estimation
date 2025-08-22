@@ -23,6 +23,17 @@ defineEvalPoints <- function(X,nEval){
     return(x)
 }
 
+#' Defines a grid of evaluation points over a 1D domain
+#'
+#' @param X Vector of points that define the domain boundaries (nObs)
+#' @param nEval Total number of evaluation points to generate
+#'
+#' @return A vector of evaluation points
+defineEvalPoints1d <- function(X, nEval) {
+    xGrid <- seq(from = min(X) * 0.9, to = max(X) * 1.1, length.out = nEval)
+    return(xGrid)
+}
+
 #' Determines bandwidth parameter h and method for kernel estimation
 #' 
 #' @param X Matrix of data points (nObs x 2)
@@ -34,6 +45,7 @@ defineEvalPoints <- function(X,nEval){
 #'   \item{h}{Bandwidth parameter determined}
 #'   \item{method.h}{Method used for bandwidth selection}
 define_h_method.h <- function(X=X, h=h, method.h=method.h, kernel.type="gauss") {
+    X <- as.matrix(X)
     # Check for conflicting bandwidth specifications
     if (!is.null(h) && !is.null(method.h)) {
         stop("Cannot specify both h and method.h. Please provide only one.")

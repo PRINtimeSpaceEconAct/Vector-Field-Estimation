@@ -1,244 +1,198 @@
 # Clear workspace and load dependencies
 rm(list = ls())
-DEBUG = TRUE
-source("libs/loadLib.R")
-source("libs/codeMunicipalities.R")
+DEBUG = FALSE
+source("src/libs/loadLib.R")
 suppressPackageStartupMessages(library(plotly))
-suppressPackageStartupMessages(library(sm))
 suppressPackageStartupMessages(library(mvtnorm))
-# ---- Data Generation ----
-# Generate random normal data for source distribution
+
+# ---- Data Generation Parameters ----
 nObs = 10000
-set.seed(123)
-# Sigma = matrix(c(1, 0, 0, 1), nrow=2)
-Sigma = matrix(c(0.75, 0.5, 0.5, 0.75), nrow=2)
-
-X_0_Gauss = mvrnorm(nObs, mu=c(0,0),Sigma = Sigma)
-
-
-
-# Create evaluation grid for density estimation and regression
 nEval = 2500
-xGrid = seq(from=min(X_0_Gauss[,1]), to=max(X_0_Gauss[,1]), length.out=round(sqrt(nEval)))
-yGrid = seq(from=min(X_0_Gauss[,2]), to=max(X_0_Gauss[,2]), length.out=round(sqrt(nEval)))
-x = as.matrix(expand.grid(xGrid, yGrid))
-
-mean = c(0, 0)
-trueGaussian = dmvnorm(x, mean, Sigma)
-
-# ---- Density Estimation Tests ----
-
-print("#---- Density Estimation Tests ----")
-print("We start by testing the fixed bandwidth density estimation against the sm package")
-print("================================================")
-print(paste("Number of observations:", nObs))
-print(paste("Number of evaluation points:", nEval))
-print("================================================")
-print("Estimating a standard Gaussian")
-bandwidth = 0.5
-print(paste(" Gaussian kernel", "bandwidth =", bandwidth))
-estGaussian <- densityEst2d(X_0_Gauss, x=x, h=bandwidth, kernel.type = "gauss", gc=TRUE)
-estGaussian.sm <- sm.density(X_0_Gauss, h=c(bandwidth, bandwidth), eval.points=x, eval.grid=FALSE, nbins=0)
-print(paste("Maximum absolute difference between sm and custom:", max(abs(estGaussian$estimator - estGaussian.sm$estimate))))
-# Test adaptive bandwidth density estimation
-print("================================================")
-print("Estimating a standard Gaussian with adaptive bandwidth")
+set.seed(123)
 alpha = 0.5
-estAdaptive <- densityEst2dAdaptive(X_0_Gauss, x=x, kernel.type="gauss", gc=TRUE, chunk_size=1024, alpha=alpha)
-print(paste("Maximum absolute difference between true and adaptive estimate:", max(abs(trueGaussian - estAdaptive$estimator))))
 
-z_diff = trueGaussian - estAdaptive$estimator
-print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-          layout(title="Difference: True Standard Gaussian - Adaptive Bandwidth Estimate",
-                 scene=list(
-                     zaxis=list(title="Difference"),
-                     xaxis=list(title="X"),
-                     yaxis=list(title="Y")
-                 )))
+# ---- Unimodal (Gaussian) Data Generation ----
+mean_unimodal = c(0,0)
+sigma_unimodal = matrix(c(0.75, 0.5, 0.5, 0.75), nrow=2)
+X_0_Gauss = mvrnorm(nObs, mu=mean_unimodal, Sigma = sigma_unimodal)
+df_gauss <- as.data.frame(X_0_Gauss)
+colnames(df_gauss) <- c("V1", "V2")
 
-# Estimate the density with the municipalities code
-estMunicipalities <- normKernelBivAdaptive(x, X_0_Gauss, alpha = alpha)
-# Plot the difference between the adaptive and the municipalities code
-z_diff = estMunicipalities - estAdaptive$estimator
-print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-          layout(title="Difference: Municipalities Implementation (Standard Gaussian) - Custom Adaptive",
-                 scene=list(
-                     zaxis=list(title="Difference"),
-                     xaxis=list(title="X"),
-                     yaxis=list(title="Y")
-                 )))
+# ---- Bimodal Data Generation ----
+n1_bimodal = round(nObs/2)
+n2_bimodal = nObs - n1_bimodal
+mean1_bimodal = c(-1, -1); mean2_bimodal = c(1, 1)
+sigma1_bimodal = matrix(c(0.6^2, 0.6*0.6*0.6, 0.6*0.6*0.6, 0.6^2), nrow=2)
+sigma2_bimodal = matrix(c(0.4^2, -0.2*0.4*0.5, -0.2*0.4*0.5, 0.5^2), nrow=2)
+X_0_Bimodal = rbind(rmvnorm(n1_bimodal, mean1_bimodal, sigma1_bimodal), rmvnorm(n2_bimodal, mean2_bimodal, sigma2_bimodal))
+df_bimodal <- as.data.frame(X_0_Bimodal)
+colnames(df_bimodal) <- c("V1", "V2")
 
-print("================================================")
-print("We now test our estimation against a bimodal distribution")
-# Generate bimodal data from mixture of two normals
-n1 = round(nObs/2)
-n2 = nObs - n1
-mean1 = c(-1, -1)
-mean2 = c(1, 1)
-sigma1_1 = 0.6
-sigma1_2 = 0.6
-rho1 = 0.6
-sigma1 = matrix(c(sigma1_1^2, rho1*sigma1_1*sigma1_2, rho1*sigma1_1*sigma1_2, sigma1_2^2), nrow=2)
-print(sigma1)
-sigma2_1 = 0.4
-sigma2_2 = 0.5
-rho2 = -0.2
-sigma2 = matrix(c(sigma2_1^2, rho2*sigma2_1*sigma2_2, rho2*sigma2_1*sigma2_2, sigma2_2^2), nrow=2)
-print(sigma2)
+# ---- Trimodal Data Generation ----
+n1_trimodal = round(nObs/3); n2_trimodal = round(nObs/3); n3_trimodal = nObs - n1_trimodal - n2_trimodal
+mean1_trimodal = c(-1.5, -1.5); mean2_trimodal = c(1.5, 1.5); mean3_trimodal = c(0, 0)
+sigma1_trimodal = matrix(c(0.4^2, 0.6*0.4*0.4, 0.6*0.4*0.4, 0.4^2), nrow=2)
+sigma2_trimodal = matrix(c(0.3^2, -0.2*0.3*0.3, -0.2*0.3*0.3, 0.3^2), nrow=2)
+sigma3_trimodal = matrix(c(0.5^2, 0, 0, 0.5^2), nrow=2)
+X_0_Trimodal = rbind(rmvnorm(n1_trimodal, mean1_trimodal, sigma1_trimodal), rmvnorm(n2_trimodal, mean2_trimodal, sigma2_trimodal), rmvnorm(n3_trimodal, mean3_trimodal, sigma3_trimodal))
+df_trimodal <- as.data.frame(X_0_Trimodal)
+colnames(df_trimodal) <- c("V1", "V2")
 
-X_0_Bimodal = rbind(
-    rmvnorm(n1, mean1, sigma1),
-    rmvnorm(n2, mean2, sigma2)
-)
 
-# True density for comparison
-trueBimodal = 0.5 * dmvnorm(x, mean1, sigma1) + 0.5 * dmvnorm(x, mean2, sigma2)
-# # Plot the true density
-# print(plot_ly(x=x[,1], y=x[,2], z=trueBimodal, intensity=trueBimodal, type="mesh3d") %>%
-#     layout(title="True Bimodal Density",
-#            scene=list(
-#                zaxis=list(title="Density"),
-#                xaxis=list(title="X"),
-#                yaxis=list(title="Y")
-#            )))
+# ---- Reusable Test Function ----
+perform_density_test <- function(df, true_density_func, dist_name) {
+    
+    cat(paste("\n\n================================================\n"))
+    cat(paste("--- Testing", dist_name, "Distribution ---\n"))
+    cat(paste("================================================\n"))
 
-# Scatter plot of the bimodal data
-print(plot_ly(x=X_0_Bimodal[,1], y=X_0_Bimodal[,2], type="scatter", mode="markers", marker=list(size=2, opacity=0.6)) %>%
-          layout(title="Bimodal Data Scatter Plot",
-                 xaxis=list(title="X"),
-                 yaxis=list(title="Y")))
+    # --- Fixed Bandwidth Test ---
+    cat("\n--- Fixed Bandwidth Analysis ---\n")
+    analysis_fixed <- runDensityAnalysis(df = df, var_cols = colnames(df), nEval = nEval,
+                                         adaptive = FALSE, show_plots = TRUE, 
+                                         component_names = c("V1", "V2"))
+    
+    true_density_fixed <- true_density_func(analysis_fixed$x)
+    z_diff_fixed <- true_density_fixed - analysis_fixed$density_results$estimator
+    
+    cat("\n--- Error Summary (Fixed Bandwidth) ---\n")
+    cat(paste("Max Absolute Error:", max(abs(z_diff_fixed)), "\n"))
+    cat(paste("Mean Absolute Error:", mean(abs(z_diff_fixed)), "\n"))
+    
+    print(plot_ly(x=analysis_fixed$x[,1], y=analysis_fixed$x[,2], z=z_diff_fixed, intensity=z_diff_fixed, type="mesh3d") %>%
+              layout(title=paste("Difference:", dist_name, "(Fixed) vs True Density"),
+                     scene=list(zaxis=list(title="Difference"), xaxis=list(title="V1"), yaxis=list(title="V2"))))
 
-print("Estimating the bimodal density")
-estBimodal <- densityEst2d(X_0_Bimodal, x=x, kernel="gauss", gc=TRUE)
-# # Plot the estimated density
-# print(plot_ly(x=x[,1], y=x[,2], z=estBimodal$estimator, intensity=estBimodal$estimator, type="mesh3d") %>%
-#     layout(title="Estimate: Mixture of Two Gaussians - Fixed Bandwidth Estimate",
-#            scene=list(
-#                zaxis=list(title="Difference"),
-#                xaxis=list(title="X"),
-#                yaxis=list(title="Y")
-#            )))
+    # --- Adaptive Bandwidth Test ---
+    cat("\n--- Adaptive Bandwidth Analysis ---\n")
+    analysis_adaptive <- runDensityAnalysis(df = df, var_cols = colnames(df), nEval = nEval,
+                                            adaptive = TRUE, alpha = alpha, show_plots = TRUE,
+                                            component_names = c("V1", "V2"))
 
-# Plot the difference between the true and estimated density
-z_diff = trueBimodal - estBimodal$estimator
-print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-          layout(title="Difference: Mixture of Two Gaussians - Fixed Bandwidth Estimate (Silverman)",
-                 scene=list(
-                     zaxis=list(title="Difference"),
-                     xaxis=list(title="X"),
-                     yaxis=list(title="Y")
-                 )))
-# Estimate the density with an adaptive bandwidth
-print("Estimating the bimodal density with adaptive bandwidth")
-alpha = 0.5
-estBimodalAdaptive <- densityEst2dAdaptive(X_0_Bimodal, x=x, kernel.type="gauss", gc=TRUE, chunk_size=1024, alpha=alpha)
-# # Plot the estimated density
-# print(plot_ly(x=x[,1], y=x[,2], z=estBimodalAdaptive$estimator, intensity=estBimodalAdaptive$estimator, type="mesh3d") %>%
-#     layout(title="Estimated Bimodal Density with Adaptive Bandwidth",
-#            scene=list(
-#                zaxis=list(title="Density"),
-#                xaxis=list(title="X"),
-#                yaxis=list(title="Y")
-#            )))
+    true_density_adaptive <- true_density_func(analysis_adaptive$x)
+    z_diff_adaptive <- true_density_adaptive - analysis_adaptive$density_results$estimator
 
-# Plot the difference between the true and estimated density
-z_diff = trueBimodal - estBimodalAdaptive$estimator
-print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-          layout(title="Difference: Mixture of Two Gaussians - Adaptive Bandwidth Estimate",
-                 scene=list(
-                     zaxis=list(title="Difference"),
-                     xaxis=list(title="X"),
-                     yaxis=list(title="Y")
-                 )))
+    cat("\n--- Error Summary (Adaptive Bandwidth) ---\n")
+    cat(paste("Max Absolute Error:", max(abs(z_diff_adaptive)), "\n"))
+    cat(paste("Mean Absolute Error:", mean(abs(z_diff_adaptive)), "\n"))
 
-print("================================================")
-print("We now test our estimation against a trimodal distribution")
-# Generate trimodal data from mixture of three normals
-n1 = round(nObs/3)
-n2 = round(nObs/3)
-n3 = nObs - n1 - n2
-mean1 = c(-1.5, -1.5)
-mean2 = c(1.5, 1.5)
-mean3 = c(0, 0)
-sigma1_1 = 0.4
-sigma1_2 = 0.4
-rho1 = 0.6
-sigma1 = matrix(c(sigma1_1^2, rho1*sigma1_1*sigma1_2, rho1*sigma1_1*sigma1_2, sigma1_2^2), nrow=2)
-print(sigma1)
-sigma2_1 = 0.3
-sigma2_2 = 0.3
-rho2 = -0.2
-sigma2 = matrix(c(sigma2_1^2, rho2*sigma2_1*sigma2_2, rho2*sigma2_1*sigma2_2, sigma2_2^2), nrow=2)
-print(sigma2)
-sigma3_1 = 0.5
-sigma3_2 = 0.5
-rho3 = 0
-sigma3 = matrix(c(sigma3_1^2, rho3*sigma3_1*sigma3_2, rho3*sigma3_1*sigma3_2, sigma3_2^2), nrow=2)
-print(sigma3)
+    print(plot_ly(x=analysis_adaptive$x[,1], y=analysis_adaptive$x[,2], z=z_diff_adaptive, intensity=z_diff_adaptive, type="mesh3d") %>%
+          layout(title=paste("Difference:", dist_name, "(Adaptive) vs True Density"),
+                 scene=list(zaxis=list(title="Difference"), xaxis=list(title="V1"), yaxis=list(title="V2"))))
+}
 
-X_0_Trimodal = rbind(
-    rmvnorm(n1, mean1, sigma1),
-    rmvnorm(n2, mean2, sigma2),
-    rmvnorm(n3, mean3, sigma3)
-)
+# ---- Execute Tests ----
 
-# True density for comparison
-trueTrimodal = (1/3) * dmvnorm(x, mean1, sigma1) + (1/3) * dmvnorm(x, mean2, sigma2) + (1/3) * dmvnorm(x, mean3, sigma3)
-# # Plot the true density
-# print(plot_ly(x=x[,1], y=x[,2], z=trueTrimodal, intensity=trueTrimodal, type="mesh3d") %>%
-#     layout(title="True Trimodal Density",
-#            scene=list(
-#                zaxis=list(title="Density"),
-#                xaxis=list(title="X"),
-#                yaxis=list(title="Y")
-#            )))
+# 1. Unimodal Test
+true_unimodal <- function(x) dmvnorm(x, mean_unimodal, sigma_unimodal)
+perform_density_test(df_gauss, true_unimodal, "Unimodal Gaussian")
 
-# Scatter plot of the trimodal data
-print(plot_ly(x=X_0_Trimodal[,1], y=X_0_Trimodal[,2], type="scatter", mode="markers", marker=list(size=2, opacity=0.6)) %>%
-          layout(title="Trimodal Data Scatter Plot",
-                 xaxis=list(title="X"),
-                 yaxis=list(title="Y")))
+# 2. Bimodal Test
+true_bimodal <- function(x) 0.5 * dmvnorm(x, mean1_bimodal, sigma1_bimodal) + 0.5 * dmvnorm(x, mean2_bimodal, sigma2_bimodal)
+perform_density_test(df_bimodal, true_bimodal, "Bimodal Mixture")
 
-print("Estimating the trimodal density")
-estTrimodal <- densityEst2d(X_0_Trimodal, x=x, kernel="gauss", gc=TRUE)
-# Plot the estimated density
-# print(plot_ly(x=x[,1], y=x[,2], z=estTrimodal$estimator, intensity=estTrimodal$estimator, type="mesh3d") %>%
-#     layout(title="Difference: Mixture of Three Gaussians - Fixed Bandwidth Estimate",
-#            scene=list(
-#                zaxis=list(title="Difference"),
-#                xaxis=list(title="X"),
-#                yaxis=list(title="Y")
-#            )))
+# 3. Trimodal Test
+true_trimodal <- function(x) (1/3) * dmvnorm(x, mean1_trimodal, sigma1_trimodal) + (1/3) * dmvnorm(x, mean2_trimodal, sigma2_trimodal) + (1/3) * dmvnorm(x, mean3_trimodal, sigma3_trimodal)
+perform_density_test(df_trimodal, true_trimodal, "Trimodal Mixture")
 
-# Plot the difference between the true and estimated density
-z_diff = trueTrimodal - estTrimodal$estimator
-print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-          layout(title="Difference: Mixture of Three Gaussians - Fixed Bandwidth Estimate (Silverman)",
-                 scene=list(
-                     zaxis=list(title="Difference"),
-                     xaxis=list(title="X"),
-                     yaxis=list(title="Y")
-                 )))
-# Estimate the density with an adaptive bandwidth
-print("Estimating the trimodal density with adaptive bandwidth")
-alpha = 0.5
-estTrimodalAdaptive <- densityEst2dAdaptive(X_0_Trimodal, x=x, kernel.type="gauss", gc=TRUE, chunk_size=1024, alpha=alpha)
-# # Plot the estimated density
-# print(plot_ly(x=x[,1], y=x[,2], z=estTrimodalAdaptive$estimator, intensity=estTrimodalAdaptive$estimator, type="mesh3d") %>%
-#     layout(title="Estimated Trimodal Density with Adaptive Bandwidth",
-#            scene=list(
-#                zaxis=list(title="Density"),
-#                xaxis=list(title="X"),
-#                yaxis=list(title="Y")
-#            )))
 
-# Plot the difference between the true and estimated density
-z_diff = trueTrimodal - estTrimodalAdaptive$estimator
-print(plot_ly(x=x[,1], y=x[,2], z=z_diff, intensity=z_diff, type="mesh3d") %>%
-          layout(title="Difference: Mixture of Three Gaussians - Adaptive Bandwidth Estimate",
-                 scene=list(
-                     zaxis=list(title="Difference"),
-                     xaxis=list(title="X"),
-                     yaxis=list(title="Y")
-                 )))
+# ##############################################################################
+# ---- 1D Density Tests ----
+# ##############################################################################
+
+
+cat("\n\n\n#################################################")
+cat("\n--- STARTING 1D DENSITY ESTIMATION TESTS ---")
+cat("\n#################################################\n")
+
+
+# ---- 1D Unimodal (Gaussian) Data Generation ----
+mean_unimodal_1d = 0
+sd_unimodal_1d = 0.75
+X_0_Gauss_1d = rnorm(nObs, mean = mean_unimodal_1d, sd = sd_unimodal_1d)
+df_gauss_1d <- data.frame(V1 = X_0_Gauss_1d)
+
+# ---- 1D Bimodal Data Generation ----
+mean1_bimodal_1d = -1.5; sd1_bimodal_1d = 0.6
+mean2_bimodal_1d = 1.5; sd2_bimodal_1d = 0.4
+X_0_Bimodal_1d = c(rnorm(n1_bimodal, mean = mean1_bimodal_1d, sd = sd1_bimodal_1d), 
+                   rnorm(n2_bimodal, mean = mean2_bimodal_1d, sd = sd2_bimodal_1d))
+df_bimodal_1d <- data.frame(V1 = X_0_Bimodal_1d)
+
+# ---- 1D Trimodal Data Generation ----
+mean1_trimodal_1d = -2.0; sd1_trimodal_1d = 0.4
+mean2_trimodal_1d = 2.0; sd2_trimodal_1d = 0.3
+mean3_trimodal_1d = 0; sd3_trimodal_1d = 0.5
+X_0_Trimodal_1d = c(rnorm(n1_trimodal, mean = mean1_trimodal_1d, sd = sd1_trimodal_1d), 
+                    rnorm(n2_trimodal, mean = mean2_trimodal_1d, sd = sd2_trimodal_1d),
+                    rnorm(n3_trimodal, mean = mean3_trimodal_1d, sd = sd3_trimodal_1d))
+df_trimodal_1d <- data.frame(V1 = X_0_Trimodal_1d)
+
+# ---- Reusable 1D Test and Plotting Function ----
+plot_1d_comparison <- function(analysis_result, true_density_func, data_points, title) {
+    x_grid <- analysis_result$x
+    est_density <- analysis_result$density_results$estimator
+    true_density <- true_density_func(x_grid)
+    
+    # Suppress dev.new() window for automated runs if needed, but keep for interactive
+    dev.new()
+    
+    ylim <- range(c(est_density, true_density))
+    
+    plot(x_grid, est_density, type = 'l', col = 'blue', ylim = ylim,
+         xlab = "Value", ylab = "Density", main = title)
+    lines(x_grid, true_density, col = 'red', lty = 2)
+    rug(data_points)
+    legend("topright", legend = c("Estimated", "True"), col = c("blue", "red"), lty = 1:2, bg="white")
+    grid()
+}
+
+perform_density_test_1d <- function(df, true_density_func, dist_name) {
+    
+    cat(paste("\n\n================================================\n"))
+    cat(paste("--- Testing 1D", dist_name, "Distribution ---\n"))
+    cat(paste("================================================\n"))
+
+    # --- Fixed Bandwidth Test ---
+    cat("\n--- Fixed Bandwidth Analysis ---\n")
+    analysis_fixed <- runDensityAnalysis(df = df, var_cols = colnames(df), nEval = nEval,
+                                         adaptive = FALSE, show_plots = FALSE)
+    
+    true_density_fixed <- true_density_func(analysis_fixed$x)
+    z_diff_fixed <- true_density_fixed - analysis_fixed$density_results$estimator
+    
+    cat("\n--- Error Summary (Fixed Bandwidth) ---\n")
+    cat(paste("Max Absolute Error:", max(abs(z_diff_fixed)), "\n"))
+    cat(paste("Mean Absolute Error:", mean(abs(z_diff_fixed)), "\n"))
+    plot_1d_comparison(analysis_fixed, true_density_func, df[[1]], paste("Comparison:", dist_name, "(Fixed)"))
+
+    # --- Adaptive Bandwidth Test ---
+    cat("\n--- Adaptive Bandwidth Analysis ---\n")
+    analysis_adaptive <- runDensityAnalysis(df = df, var_cols = colnames(df), nEval = nEval,
+                                            adaptive = TRUE, alpha = alpha, show_plots = FALSE)
+
+    true_density_adaptive <- true_density_func(analysis_adaptive$x)
+    z_diff_adaptive <- true_density_adaptive - analysis_adaptive$density_results$estimator
+
+    cat("\n--- Error Summary (Adaptive Bandwidth) ---\n")
+    cat(paste("Max Absolute Error:", max(abs(z_diff_adaptive)), "\n"))
+    cat(paste("Mean Absolute Error:", mean(abs(z_diff_adaptive)), "\n"))
+    plot_1d_comparison(analysis_adaptive, true_density_func, df[[1]], paste("Comparison:", dist_name, "(Adaptive)"))
+}
+
+# ---- Execute 1D Tests ----
+
+# 1. 1D Unimodal Test
+true_unimodal_1d <- function(x) dnorm(x, mean_unimodal_1d, sd_unimodal_1d)
+perform_density_test_1d(df_gauss_1d, true_unimodal_1d, "Unimodal Gaussian")
+
+# 2. 1D Bimodal Test
+true_bimodal_1d <- function(x) 0.5 * dnorm(x, mean1_bimodal_1d, sd1_bimodal_1d) + 0.5 * dnorm(x, mean2_bimodal_1d, sd2_bimodal_1d)
+perform_density_test_1d(df_bimodal_1d, true_bimodal_1d, "Bimodal Mixture")
+
+# 3. 1D Trimodal Test
+true_trimodal_1d <- function(x) (1/3) * dnorm(x, mean1_trimodal_1d, sd1_trimodal_1d) + 
+                                (1/3) * dnorm(x, mean2_trimodal_1d, sd2_trimodal_1d) + 
+                                (1/3) * dnorm(x, mean3_trimodal_1d, sd3_trimodal_1d)
+perform_density_test_1d(df_trimodal_1d, true_trimodal_1d, "Trimodal Mixture")
 

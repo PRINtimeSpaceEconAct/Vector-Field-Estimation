@@ -239,8 +239,6 @@ runPanelVFAnalysis <- function(panel_df,
 #' @param years Optional numeric/integer vector of length nT to label the TE plot's x-axis (default 1:nT).
 #' @param label_names Optional character vector of length nObs for FE scatter labels (default NULL -> no labels).
 #' @param component_names A character vector of length 2 with names for the x and y components.
-#' @param out_dir Output directory for saved plots (default "outpics").
-#' @param save_plots Logical, save plots as PDFs to `out_dir` (default TRUE).
 #' @param show_plots Logical, open plotting devices to display plots (default TRUE).
 #'
 #' @return Invisibly returns NULL. This function is called for its side effect of generating plots.
@@ -251,10 +249,7 @@ plotPanelVFAnalysis <- function(analysis_results,
                                 rescale_ref_index = NULL,
                                 years = NULL,
                                 label_names = NULL,
-                                component_names = c("X1", "X2"),
-                                out_dir = "outpics",
-                                save_plots = TRUE,
-                                show_plots = TRUE) {
+                                component_names = c("X1", "X2")) {
 
     # --- Extract data from results object ---
     X <- analysis_results$X
@@ -309,10 +304,6 @@ plotPanelVFAnalysis <- function(analysis_results,
         years <- 1:nT
     }
 
-    if (save_plots && !dir.exists(out_dir)) {
-        dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-    }
-
     cat("Preparing plot data...\n")
 
     # --- Prepare plot data (filter/rescale) ---
@@ -346,7 +337,7 @@ plotPanelVFAnalysis <- function(analysis_results,
     
     # Vector Field plot
     lengthArrows <- (5 / timeInterval) * 1e-1 * 0.5
-    if (show_plots) grDevices::dev.new()
+    grDevices::dev.new()
     graphics::par(family = "mono")
     graphics::plot(x_plot, type = "n",
                    xlab = component_names[1],
@@ -372,15 +363,14 @@ plotPanelVFAnalysis <- function(analysis_results,
                               add = TRUE, col = "purple")
         }
     }
-    if (save_plots) grDevices::dev.copy2pdf(file = file.path(out_dir, "VF.pdf"), width = 7, height = 7, family = "mono")
-
+    
     # FE plots
     if (!is.null(FE_hat)) {
         cex_vals_fe <- ifelse(FE_signif, 1.0, 0.1)
         x_init1 <- X[, 1, 1]
         x_init2 <- X[, 2, 1]
 
-        if (show_plots) grDevices::dev.new()
+        grDevices::dev.new()
         graphics::par(family = "mono")
         graphics::plot(x_init1, FE_hat[, 1], main = paste("Fixed Effects vs. Initial", component_names[1]), xlab = paste(component_names[1], "at t0"), ylab = paste("FE (", component_names[1], ")", sep = ""), pch = 19, cex = cex_vals_fe)
         graphics::abline(h = 0)
@@ -388,9 +378,8 @@ plotPanelVFAnalysis <- function(analysis_results,
         if (!is.null(label_names) && length(label_names) == nObs) {
             graphics::text(x_init1, FE_hat[, 1], labels = label_names, cex = 0.5, pos = 4, col = "red")
         }
-        if (save_plots) grDevices::dev.copy2pdf(file = file.path(out_dir, paste0("FE_vs_initial_", gsub(" ", "_", component_names[1]), ".pdf")), width = 7, height = 7, family = "mono")
-
-        if (show_plots) grDevices::dev.new()
+        
+        grDevices::dev.new()
         graphics::par(family = "mono")
         graphics::plot(x_init2, FE_hat[, 2], main = paste("Fixed Effects vs. Initial", component_names[2]), xlab = paste(component_names[2], "at t0"), ylab = paste("FE (", component_names[2], ")", sep = ""), pch = 19, cex = cex_vals_fe)
         graphics::abline(h = 0)
@@ -398,7 +387,7 @@ plotPanelVFAnalysis <- function(analysis_results,
         if (!is.null(label_names) && length(label_names) == nObs) {
             graphics::text(x_init2, FE_hat[, 2], labels = label_names, cex = 0.5, pos = 4, col = "red")
         }
-        if (save_plots) grDevices::dev.copy2pdf(file = file.path(out_dir, paste0("FE_vs_initial_", gsub(" ", "_", component_names[2]), ".pdf")), width = 7, height = 7, family = "mono")
+        
     }
 
     # TE plots with bootstrap bands
@@ -409,7 +398,7 @@ plotPanelVFAnalysis <- function(analysis_results,
         upper_bound <- TE_quantiles[2, , ]
 
         # Component 1
-        if (show_plots) grDevices::dev.new()
+        grDevices::dev.new()
         graphics::par(family = "mono")
         y1_range <- range(c(lower_bound[, 1], upper_bound[, 1], TE_hat[, 1]), na.rm = TRUE)
         graphics::plot(years[2:nT], TE_hat[, 1], main = paste("Time Effects (", component_names[1], ")", sep = ""), xlab = "time", ylab = paste("TE (", component_names[1], ")", sep = ""), type = "n", ylim = y1_range)
@@ -417,10 +406,9 @@ plotPanelVFAnalysis <- function(analysis_results,
         graphics::grid()
         graphics::abline(h = 0)
         graphics::lines(years[2:nT], TE_hat[, 1], pch = 19, cex = cex_vals_te, type = "b")
-        if (save_plots) grDevices::dev.copy2pdf(file = file.path(out_dir, paste0("TE_", gsub(" ", "_", component_names[1]), ".pdf")), width = 7, height = 7, family = "mono")
-
+        
         # Component 2
-        if (show_plots) grDevices::dev.new()
+        grDevices::dev.new()
         graphics::par(family = "mono")
         y2_range <- range(c(lower_bound[, 2], upper_bound[, 2], TE_hat[, 2]), na.rm = TRUE)
         graphics::plot(years[2:nT], TE_hat[, 2], main = paste("Time Effects (", component_names[2], ")", sep = ""), xlab = "time", ylab = paste("TE (", component_names[2], ")", sep = ""), type = "n", ylim = y2_range)
@@ -428,7 +416,7 @@ plotPanelVFAnalysis <- function(analysis_results,
         graphics::grid()
         graphics::abline(h = 0)
         graphics::lines(years[2:nT], TE_hat[, 2], pch = 19, cex = cex_vals_te, type = "b")
-        if (save_plots) grDevices::dev.copy2pdf(file = file.path(out_dir, paste0("TE_", gsub(" ", "_", component_names[2]), ".pdf")), width = 7, height = 7, family = "mono")
+        
     }
 
     cat("Plotting finished.\n")
@@ -437,12 +425,13 @@ plotPanelVFAnalysis <- function(analysis_results,
 }
 
 
-#' Performs 2D kernel density estimation on a dataframe.
+#' Performs 2D kernel density estimation on a dataframe and optionally plots the results.
 #'
 #' This is a wrapper around the `densityEst2d` and `densityEst2dAdaptive` functions.
 #' It handles data preparation from a dataframe, supports 1D and 2D variables,
 #' and returns a comprehensive results object. For 1D variables, it creates a
-#' pseudo-2D representation with a constant second dimension.
+#' pseudo-2D representation with a constant second dimension. If `show_plots` or
+#' `save_plots` is TRUE, it will also call `plotDensityAnalysis` to generate visualizations.
 #'
 #' @param df A data frame containing the variable(s).
 #' @param var_cols A character vector of length 1 or 2 specifying the variable columns.
@@ -453,6 +442,8 @@ plotPanelVFAnalysis <- function(analysis_results,
 #' @param adaptive Logical, whether to use adaptive kernel density estimation (default FALSE).
 #' @param alpha Numeric, sensitivity parameter for adaptive bandwidth (default 0.5).
 #' @param chunk_size Integer chunk size for compute functions. If NULL, defaults to `nEval`.
+#' @param component_names A character vector of length 2 with names for the x and y components.
+#' @param show_plots Logical, open plotting devices to display plots (default TRUE).
 #'
 #' @return A list containing all inputs, results, and intermediate objects.
 #' @export
@@ -464,7 +455,9 @@ runDensityAnalysis <- function(df,
                                h = NULL,
                                adaptive = FALSE,
                                alpha = 0.5,
-                               chunk_size = NULL) {
+                               chunk_size = NULL,
+                               component_names = NULL,
+                               show_plots = TRUE) {
     
     # --- Input validation and data preparation ---
     if (!is.data.frame(df)) {
@@ -479,14 +472,16 @@ runDensityAnalysis <- function(df,
 
     is_1d <- length(var_cols) == 1
 
-    X <- as.matrix(df[, var_cols, drop = FALSE])
+    X <- df[, var_cols, drop = FALSE]
+    X <- X[complete.cases(X), , drop = FALSE]
+
     if (is_1d) {
-        X <- cbind(X, 0)
-        colnames(X) <- c(var_cols, "dummy")
+        X <- X[[1]]
+    } else {
+        X <- as.matrix(X)
     }
 
-    X <- X[complete.cases(X), ]
-    nObs <- nrow(X)
+    nObs <- if(is_1d) length(X) else nrow(X)
     
     if (nObs == 0) {
         stop("No complete observations to perform density estimation.")
@@ -495,21 +490,37 @@ runDensityAnalysis <- function(df,
     cat("Density analysis started.\n")
 
     # 1) Evaluation grid
-    x <- defineEvalPoints(X, nEval)
+    if (is_1d) {
+        x <- defineEvalPoints1d(X, nEval)
+    } else {
+        x <- defineEvalPoints(X, nEval)
+    }
     
     if (is.null(chunk_size)) {
         chunk_size <- nEval
     }
 
     # 2) Density Estimation
-    if (adaptive) {
-        density_results <- densityEst2dAdaptive(X = X, x = x, nEval = nEval, kernel.type = kernel.type,
-                                               method.h = method.h, h = h, alpha = alpha, 
-                                               chunk_size = chunk_size, gc = FALSE)
+    if (is_1d) {
+        if (adaptive) {
+            density_results <- densityEst1dAdaptive(X = X, x = x, nEval = nEval, kernel.type = kernel.type,
+                                                   method.h = method.h, h = h, alpha = alpha,
+                                                   chunk_size = chunk_size, gc = FALSE)
+        } else {
+            density_results <- densityEst1d(X = X, x = x, nEval = nEval, kernel.type = kernel.type,
+                                           method.h = method.h, h = h,
+                                           chunk_size = chunk_size, gc = FALSE)
+        }
     } else {
-        density_results <- densityEst2d(X = X, x = x, nEval = nEval, kernel.type = kernel.type,
-                                       method.h = method.h, h = h,
-                                       chunk_size = chunk_size, gc = FALSE)
+        if (adaptive) {
+            density_results <- densityEst2dAdaptive(X = X, x = x, nEval = nEval, kernel.type = kernel.type,
+                                                   method.h = method.h, h = h, alpha = alpha, 
+                                                   chunk_size = chunk_size, gc = FALSE)
+        } else {
+            density_results <- densityEst2d(X = X, x = x, nEval = nEval, kernel.type = kernel.type,
+                                           method.h = method.h, h = h,
+                                           chunk_size = chunk_size, gc = FALSE)
+        }
     }
 
     cat("Analysis completed.\n")
@@ -532,14 +543,21 @@ runDensityAnalysis <- function(df,
     cat("------------------------\n\n")
 
 
-    return(listN(
+    analysis_results <- listN(
         # Inputs
         df, var_cols, nEval, kernel.type, method.h, h, adaptive, alpha, chunk_size,
         # Data
         X, x, is_1d,
         # Results
         density_results
-    ))
+    )
+
+    if (show_plots) {
+        plotDensityAnalysis(analysis_results = analysis_results,
+                            component_names = component_names)
+    }
+
+    return(analysis_results)
 }
 
 
@@ -550,17 +568,11 @@ runDensityAnalysis <- function(df,
 #'
 #' @param analysis_results A list object returned by `runDensityAnalysis`.
 #' @param component_names A character vector of length 2 with names for the x and y components.
-#' @param out_dir Output directory for saved plots (default "outpics").
-#' @param save_plots Logical, save plots as PDFs to `out_dir` (default TRUE).
-#' @param show_plots Logical, open plotting devices to display plots (default TRUE).
 #'
 #' @return Invisibly returns NULL. This function is called for its side effect of generating plots.
 #' @export
 plotDensityAnalysis <- function(analysis_results,
-                                component_names = NULL,
-                                out_dir = "outpics",
-                                save_plots = TRUE,
-                                show_plots = TRUE) {
+                                component_names = NULL) {
     
     # --- Extract data from results object ---
     X <- analysis_results$X
@@ -583,30 +595,23 @@ plotDensityAnalysis <- function(analysis_results,
     }
 
 
-    if (save_plots && !dir.exists(out_dir)) {
-        dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-    }
-
     cat("Generating density plot...\n")
 
     # --- Plotting ---
     old_par <- graphics::par(no.readonly = TRUE)
     on.exit(graphics::par(old_par))
 
-    if (show_plots) grDevices::dev.new()
+    grDevices::dev.new()
     graphics::par(family = "mono")
 
     if (is_1d) {
         # 1D plot
-        plot(x[, 1], density_results$estimator, type = 'l',
+        plot(x, density_results$estimator, type = 'l',
              xlab = component_names[1], ylab = component_names[2],
              main = "Estimated 1D Density")
         graphics::rug(X[, 1])
         graphics::grid()
-        if (save_plots) {
-            grDevices::dev.copy2pdf(file = file.path(out_dir, "density_1D.pdf"), width = 7, height = 7, family = "mono")
-        }
-
+        
     } else {
         # 2D contour plot
         x_coords <- sort(unique(x[, 1]))
@@ -618,9 +623,7 @@ plotDensityAnalysis <- function(analysis_results,
                        main = "Estimated 2D Density with Data Points")
         graphics::contour(x_coords, y_coords, z_matrix, add = TRUE, col = "purple")
         graphics::grid()
-        if (save_plots) {
-             grDevices::dev.copy2pdf(file = file.path(out_dir, "density_2D.pdf"), width = 7, height = 7, family = "mono")
-        }
+        
     }
     
     cat("Plotting finished.\n")
