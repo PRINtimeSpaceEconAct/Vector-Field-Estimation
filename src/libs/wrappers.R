@@ -337,8 +337,6 @@ plotPanelVFAnalysis <- function(analysis_results,
     
     # Vector Field plot
     lengthArrows <- (5 / timeInterval) * 1e-1 * 0.5
-    grDevices::dev.new()
-    graphics::par(family = "mono")
     graphics::plot(x_plot, type = "n",
                    xlab = component_names[1],
                    ylab = component_names[2],
@@ -370,8 +368,7 @@ plotPanelVFAnalysis <- function(analysis_results,
         x_init1 <- X[, 1, 1]
         x_init2 <- X[, 2, 1]
 
-        grDevices::dev.new()
-        graphics::par(family = "mono")
+        readline(prompt="Press [enter] to see the next plot")
         graphics::plot(x_init1, FE_hat[, 1], main = paste("Fixed Effects vs. Initial", component_names[1]), xlab = paste(component_names[1], "at t0"), ylab = paste("FE (", component_names[1], ")", sep = ""), pch = 19, cex = cex_vals_fe)
         graphics::abline(h = 0)
         graphics::grid()
@@ -379,8 +376,7 @@ plotPanelVFAnalysis <- function(analysis_results,
             graphics::text(x_init1, FE_hat[, 1], labels = label_names, cex = 0.5, pos = 4, col = "red")
         }
         
-        grDevices::dev.new()
-        graphics::par(family = "mono")
+        readline(prompt="Press [enter] to see the next plot")
         graphics::plot(x_init2, FE_hat[, 2], main = paste("Fixed Effects vs. Initial", component_names[2]), xlab = paste(component_names[2], "at t0"), ylab = paste("FE (", component_names[2], ")", sep = ""), pch = 19, cex = cex_vals_fe)
         graphics::abline(h = 0)
         graphics::grid()
@@ -398,8 +394,7 @@ plotPanelVFAnalysis <- function(analysis_results,
         upper_bound <- TE_quantiles[2, , ]
 
         # Component 1
-        grDevices::dev.new()
-        graphics::par(family = "mono")
+        readline(prompt="Press [enter] to see the next plot")
         y1_range <- range(c(lower_bound[, 1], upper_bound[, 1], TE_hat[, 1]), na.rm = TRUE)
         graphics::plot(years[2:nT], TE_hat[, 1], main = paste("Time Effects (", component_names[1], ")", sep = ""), xlab = "time", ylab = paste("TE (", component_names[1], ")", sep = ""), type = "n", ylim = y1_range)
         graphics::polygon(c(years[2:nT], rev(years[2:nT])), c(lower_bound[, 1], rev(upper_bound[, 1])), col = "grey80", border = NA)
@@ -408,8 +403,7 @@ plotPanelVFAnalysis <- function(analysis_results,
         graphics::lines(years[2:nT], TE_hat[, 1], pch = 19, cex = cex_vals_te, type = "b")
         
         # Component 2
-        grDevices::dev.new()
-        graphics::par(family = "mono")
+        readline(prompt="Press [enter] to see the next plot")
         y2_range <- range(c(lower_bound[, 2], upper_bound[, 2], TE_hat[, 2]), na.rm = TRUE)
         graphics::plot(years[2:nT], TE_hat[, 2], main = paste("Time Effects (", component_names[2], ")", sep = ""), xlab = "time", ylab = paste("TE (", component_names[2], ")", sep = ""), type = "n", ylim = y2_range)
         graphics::polygon(c(years[2:nT], rev(years[2:nT])), c(lower_bound[, 2], rev(upper_bound[, 2])), col = "grey80", border = NA)
@@ -601,32 +595,11 @@ plotDensityAnalysis <- function(analysis_results,
     old_par <- graphics::par(no.readonly = TRUE)
     on.exit(graphics::par(old_par))
 
-    grDevices::dev.new()
-    graphics::par(family = "mono")
-
-    if (is_1d) {
-        # 1D plot
-        plot(x, density_results$estimator, type = 'l',
+    graphics::plot(x, density_results$estimator, type = 'l',
              xlab = component_names[1], ylab = component_names[2],
              main = "Estimated 1D Density")
-        graphics::rug(X[, 1])
-        graphics::grid()
-        
-    } else {
-        # 2D contour plot
-        x_coords <- sort(unique(x[, 1]))
-        y_coords <- sort(unique(x[, 2]))
-        z_matrix <- matrix(density_results$estimator, nrow = length(x_coords), ncol = length(y_coords))
-
-        graphics::plot(X, pch = 19, col = rgb(0,0,0,0.2), cex = 0.5,
-                       xlab = component_names[1], ylab = component_names[2],
-                       main = "Estimated 2D Density with Data Points")
-        graphics::contour(x_coords, y_coords, z_matrix, add = TRUE, col = "purple")
-        graphics::grid()
-        
-    }
-    
-    cat("Plotting finished.\n")
+    graphics::rug(X[, 1])
+    graphics::grid()
     
     invisible(NULL)
 }

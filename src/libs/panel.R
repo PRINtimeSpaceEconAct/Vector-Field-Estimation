@@ -387,20 +387,23 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
         
         # Keep calculation for solutions (estimator)
         bConstant = rbind(T1,T2)
-        solve_system <- function(k) { # k is index within chunk (1 to current_chunk_size)
-            if ( det(MDenominator[,,k]) == 0 ) {
+        solve_python hyperliquid-historical.py decompress BTC -sd 20240815 -ed 20250813system <- function(k) { # k is index within chunk (1 to current_chunk_size)
+            if ( rcond(MDenominator[,,k]) < 1e-3) {
                 return(rep(NaN,2))
             }
+            else {
+                           
+                # GINV
+                #sol = as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k])
             
-            # GINV
-            # sol = as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k])
+                # RIDGE
+                 lambda = 1e-5 # small ridge parameter to avoid singularity
+                 A = MDenominator[,,k]
+                 sol = as.numeric(solve(A + lambda * diag(2), bConstant[,k]))
             
-            # RIDGE
-            lambda = 1e-5 # small ridge parameter to avoid singularity
-            A = MDenominator[,,k]
-            sol = as.numeric(solve(A + lambda * diag(2), bConstant[,k]))
-            
-            return(sol)
+                return(sol)
+            }
+
         }
         solutions <- matrix(unlist(purrr::map(1:current_chunk_size, ~ solve_system(.x))),
                             nrow=2,byrow = FALSE)

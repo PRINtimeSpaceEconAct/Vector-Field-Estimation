@@ -1,5 +1,5 @@
 # Clear workspace and load dependencies
-setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
+# setwd("~/Library/CloudStorage/OneDrive-UniversityofPisa/timeSpaceEvolutionEcAct/RVF/R code/Vector Field Estimation/")
 rm(list = ls())
 DEBUG = FALSE
 source("src/libs/loadLib.R")
@@ -79,7 +79,7 @@ analysis_results <- runPanelVFAnalysis(panel_data,
                                      FE = TRUE,
                                      TE = TRUE,
                                      uniform_weights = TRUE,
-                                     kernel.type = "epa",
+                                     kernel.type = "gauss",
                                      method.h = "silverman",
                                      chunk_size = 1024,
                                      bootstrap_B = 100)
@@ -90,8 +90,4 @@ plotPanelVFAnalysis(analysis_results,
                     rescale_ref_index = nT,
                     years = sort(unique(data$Year)),
                     label_names = arrange(filter(data,Year == min(Year)),countryCode)$countryCode,
-                    component_names = c("Log GDP", "Life Expectancy"),
-                    out_dir = "outpics",
-                    save_plots = TRUE,
-                    show_plots = TRUE)
-
+                    component_names = c("Log GDP", "Life Expectancy"))
