@@ -313,7 +313,8 @@ within_transform <- function(X,
 #'         the bandwidth `h`, the bandwidth selection method `method.h`, and the kernel type `kernel.type`.
 compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="gauss", D=NULL, 
                              method.h=NULL, h=NULL, lambda=NULL, 
-                             gc=FALSE, chunk_size=nrow(x), Y=NULL) {
+                             gc=FALSE, chunk_size=nrow(x), Y=NULL,
+                             ridge_param = 1e-5, rcond_threshold = 1e-3) {
     
     nObs = nrow(X)
     covX = cov(X)
@@ -347,6 +348,7 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
     if (DEBUG) {
         print(paste("Computing ",length(chunks)," chunks"))
         print(paste("Chunk size: ",chunk_size)) }
+    
     
     # start estimate
     for(i in 1:length(chunks)) {
@@ -387,8 +389,13 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
         
         # Keep calculation for solutions (estimator)
         bConstant = rbind(T1,T2)
-        solve_python hyperliquid-historical.py decompress BTC -sd 20240815 -ed 20250813system <- function(k) { # k is index within chunk (1 to current_chunk_size)
-            if ( rcond(MDenominator[,,k]) < 1e-3) {
+        
+        rcond_values <- purrr::map_dbl(1:current_chunk_size, ~ rcond(MDenominator[,,.x]))
+        
+        
+
+        solve_system <- function(k) { # k is index within chunk (1 to current_chunk_size)
+            if (rcond(MDenominator[,,k]) < rcond_threshold) {
                 return(rep(NaN,2))
             }
             else {
@@ -397,9 +404,13 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
                 #sol = as.numeric(ginv(MDenominator[,,k]) %*% bConstant[,k])
             
                 # RIDGE
-                 lambda = 1e-5 # small ridge parameter to avoid singularity
+                 lambda_ridge = ridge_param # small ridge parameter to avoid singularity
                  A = MDenominator[,,k]
-                 sol = as.numeric(solve(A + lambda * diag(2), bConstant[,k]))
+                 sol <- tryCatch({
+                     as.numeric(solve(A + lambda_ridge * diag(2), bConstant[,k]))
+                 }, error = function(e) {
+                     return(rep(NaN, 2))
+                 })
             
                 return(sol)
             }
@@ -412,6 +423,7 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
 
         if (gc == TRUE){ gc() }
     }
+    
     return(listN(x, estimator, h, method.h, kernel.type))
 }
 
@@ -472,7 +484,8 @@ compute_m <- function(X_obs_unrolled, x_eval, beta, m_0, x0, beta_0) {
     term2_1 <- sweep(Diff1, 2, beta[, 1], "*")
     term2_2 <- sweep(Diff2, 2, beta[, 2], "*")
     term2 <- term2_1 + term2_2
-    
+
+    # No na.rm here: any NA for a column means that m(x_e) is undefined for that e
     S2 <- colSums(term2)
     
     # Final computation of m(x)
@@ -532,13 +545,22 @@ compute_m0 <- function(X_obs_unrolled, Y_obs_unrolled, beta, x0, beta_0) {
     term2_1 <- sweep(Diff1, 2, beta[, 1], "*")
     term2_2 <- sweep(Diff2, 2, beta[, 2], "*")
     term2 <- term2_1 + term2_2
-    
-    S2 <- 1/NT * sum(term2)
+
+    # Robust aggregation: ignore NA contributions and scale by the number of valid pairs
+    valid_mask <- !is.na(term2)
+    valid_count <- sum(valid_mask)
+    if (valid_count == 0) {
+        S2 <- 0
+        scale_den <- 1
+    } else {
+        S2 <- sum(term2[valid_mask]) / valid_count * NT  # rescale to average-per-pair times NT
+        scale_den <- NT
+    }
     
     # Sy = sum_{i,t} Y_{i,t}
-    Sy = sum(Y_obs_unrolled) 
+    Sy = sum(Y_obs_unrolled)
     
-    m_0 <- (1 / NT) * (Sy - S1 + S2)
+    m_0 <- (1 / scale_den) * (Sy - S1 + S2)
     
     return(m_0)
 }
@@ -571,7 +593,9 @@ estimate_panel_vf <- function(X,
                               method.h = "silverman",
                               h = NULL,
                               chunk_size = 512,
-                              gc = FALSE) {
+                              gc = FALSE,
+                              ridge_param = 1e-5,
+                              rcond_threshold = 1e-3) {
 
     # 1. Within transformation
     Filtered <- within_transform(X,
@@ -595,12 +619,14 @@ estimate_panel_vf <- function(X,
     derivative_estimator_1 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
                                                       kernel.type=kernel.type, D=NULL,
                                                       method.h=method.h, h=h, lambda=NULL,
-                                                      gc=gc, chunk_size=chunk_size, Y=Y1_star)
+                                                      gc=gc, chunk_size=chunk_size, Y=Y1_star,
+                                                      ridge_param = ridge_param, rcond_threshold = rcond_threshold)
 
     derivative_estimator_2 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
                                                       kernel.type=kernel.type, D=NULL,
                                                       method.h=method.h, h=h, lambda=NULL,
-                                                      gc=gc, chunk_size=chunk_size, Y=Y2_star)
+                                                      gc=gc, chunk_size=chunk_size, Y=Y2_star,
+                                                      ridge_param = ridge_param, rcond_threshold = rcond_threshold)
 
     # 3. Estimate derivatives at observed points
   
@@ -611,12 +637,14 @@ estimate_panel_vf <- function(X,
     derivative_obs_1 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
                                                 kernel.type=kernel.type, D=NULL,
                                                 method.h=method.h, h=h, lambda=NULL,
-                                                gc=gc, chunk_size=chunk_size, Y=Y1_star_obs)
+                                                gc=gc, chunk_size=chunk_size, Y=Y1_star_obs,
+                                                ridge_param = ridge_param, rcond_threshold = rcond_threshold)
 
     derivative_obs_2 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
                                                 kernel.type=kernel.type, D=NULL,
                                                 method.h=method.h, h=h, lambda=NULL,
-                                                gc=gc, chunk_size=chunk_size, Y=Y2_star_obs)
+                                                gc=gc, chunk_size=chunk_size, Y=Y2_star_obs,
+                                                ridge_param = ridge_param, rcond_threshold = rcond_threshold)
 
     # 4. Compute m0
     meanPoint <- colSums(X0_raw) / nrow(X0_raw)
@@ -633,6 +661,7 @@ estimate_panel_vf <- function(X,
     h <- derivative_estimator_1$h
 
     return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, h, chunk_size, gc,
+                 ridge_param, rcond_threshold,
                  derivative_estimator_1, derivative_estimator_2, derivative_obs_1, derivative_obs_2, 
                  iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
 }

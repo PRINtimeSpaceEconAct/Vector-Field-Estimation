@@ -40,7 +40,9 @@ runPanelVFAnalysis <- function(panel_df,
                                hOpt = FALSE,
                                alphaOpt = FALSE,
                                h = NULL,
-                               alpha = 0.5) {
+                               alpha = 0.5,
+                               ridge_param = 1e-5,
+                               rcond_threshold = 1e-3) {
 
     is_two_df_case <- is.list(panel_df) && length(panel_df) == 2 && all(sapply(panel_df, is.data.frame))
 
@@ -94,7 +96,9 @@ runPanelVFAnalysis <- function(panel_df,
             method.h = method.h,
             h = h,
             chunk_size = chunk_size,
-            gc = FALSE
+            gc = FALSE,
+            ridge_param = ridge_param,
+            rcond_threshold = rcond_threshold
         )
         VF_hat <- panel_vf_results$estimator
         X0_raw <- panel_vf_results$X0_raw
@@ -218,6 +222,7 @@ runPanelVFAnalysis <- function(panel_df,
         panel_df, var_cols, id_col, time_col, X,
         nEval, FE, TE, uniform_weights, kernel.type, method.h, chunk_size,
         bootstrap_B, p_crit, estimation_method, adaptive, hOpt, alphaOpt, h, alpha,
+        ridge_param, rcond_threshold,
         # Results
         x, panel_vf_results, bootstrap_samples,
         VF_hat, FE_hat, TE_hat,
@@ -239,7 +244,8 @@ runPanelVFAnalysis <- function(panel_df,
 #' @param years Optional numeric/integer vector of length nT to label the TE plot's x-axis (default 1:nT).
 #' @param label_names Optional character vector of length nObs for FE scatter labels (default NULL -> no labels).
 #' @param component_names A character vector of length 2 with names for the x and y components.
-#' @param show_plots Logical, open plotting devices to display plots (default TRUE).
+#' @param save_plots Logical, save the vector field plot to a file (default FALSE).
+#' @param save_path Character, path where to save the plot (default "test_pics_VF").
 #'
 #' @return Invisibly returns NULL. This function is called for its side effect of generating plots.
 #' @export
@@ -249,7 +255,9 @@ plotPanelVFAnalysis <- function(analysis_results,
                                 rescale_ref_index = NULL,
                                 years = NULL,
                                 label_names = NULL,
-                                component_names = c("X1", "X2")) {
+                                component_names = c("X1", "X2"),
+                                save_plots = FALSE,
+                                save_path = "test_pics_VF") {
 
     # --- Extract data from results object ---
     X <- analysis_results$X
@@ -331,86 +339,116 @@ plotPanelVFAnalysis <- function(analysis_results,
 
     cat("Generating plots...\n")
 
+    # Local function to generate the vector field plot
+    plot_vf <- function() {
+        lengthArrows <- 1
+        graphics::plot(x_plot, type = "n",
+                       xlab = component_names[1],
+                       ylab = component_names[2],
+                       main = "Estimated Vector Field")
+        if(rescale) {
+          graphics::abline(h = 1, lty = 3)
+          graphics::abline(v = 1, lty = 3)
+        } else {
+          graphics::abline(h = 0, lty = 3)
+          graphics::abline(v = 0, lty = 3)
+        }
+        graphics::arrows(x_plot[, 1], x_plot[, 2],
+                         x_plot[, 1] + lengthArrows * VF_hat_plot[, 1],
+                         x_plot[, 2] + lengthArrows * VF_hat_plot[, 2],
+                         angle = 15, col = "black", length = 0.05)
+        #graphics::points(X0_raw_plot[, 1], X0_raw_plot[, 2], pch = 19, col = "red", cex = 0.5)
+        if (requireNamespace("sm", quietly = TRUE)) {
+            X0_raw_plot_complete <- X0_raw_plot[complete.cases(X0_raw_plot), ]
+            if(nrow(X0_raw_plot_complete) > 1) {
+                est.dens <- sm::sm.density(X0_raw_plot_complete, display = "none")
+                graphics::contour(est.dens$eval.points[, 1], est.dens$eval.points[, 2], est.dens$estimate,
+                                  add = TRUE, col = "purple")
+            }
+        }
+    }
+
     # --- Plotting ---
     old_par <- graphics::par(no.readonly = TRUE)
     on.exit(graphics::par(old_par))
     
-    # Vector Field plot
-    lengthArrows <- (5 / timeInterval) * 1e-1 * 0.5
-    graphics::plot(x_plot, type = "n",
-                   xlab = component_names[1],
-                   ylab = component_names[2],
-                   main = "Estimated Vector Field")
-    if(rescale) {
-      graphics::abline(h = 1, lty = 3)
-      graphics::abline(v = 1, lty = 3)
+    if (save_plots) {
+        # Save Vector Field plot and exit
+        dir.create(save_path, showWarnings = FALSE)
+        
+        kernel_type_str <- tools::toTitleCase(analysis_results$kernel.type)
+        
+        ridge_val <- analysis_results$ridge_param
+        ridge_str <- if (ridge_val == 0) "0" else gsub("e-0", "e-", formatC(ridge_val, format = "e", digits = 0))
+        
+        rcond_val <- analysis_results$rcond_threshold
+        rcond_str <- if (rcond_val == 0) "0" else gsub("e-0", "e-", formatC(rcond_val, format = "e", digits = 0))
+        
+        filename <- sprintf("%s_ridge_%s_cond%s.svg", kernel_type_str, ridge_str, rcond_str)
+        filepath <- file.path(save_path, filename)
+        
+        cat("Saving vector field plot to:", filepath, "\n")
+        
+        svg(filepath)
+        plot_vf()
+        dev.off()
+
     } else {
-      graphics::abline(h = 0, lty = 3)
-      graphics::abline(v = 0, lty = 3)
-    }
-    graphics::arrows(x_plot[, 1], x_plot[, 2],
-                     x_plot[, 1] + lengthArrows * VF_hat_plot[, 1],
-                     x_plot[, 2] + lengthArrows * VF_hat_plot[, 2],
-                     angle = 15, col = "black", length = 0.05)
-    graphics::points(X0_raw_plot[, 1], X0_raw_plot[, 2], pch = 19, col = "red", cex = 0.5)
-    if (requireNamespace("sm", quietly = TRUE)) {
-        X0_raw_plot_complete <- X0_raw_plot[complete.cases(X0_raw_plot), ]
-        if(nrow(X0_raw_plot_complete) > 1) {
-            est.dens <- sm::sm.density(X0_raw_plot_complete, display = "none")
-            graphics::contour(est.dens$eval.points[, 1], est.dens$eval.points[, 2], est.dens$estimate,
-                              add = TRUE, col = "purple")
-        }
-    }
-    
-    # FE plots
-    if (!is.null(FE_hat)) {
-        cex_vals_fe <- ifelse(FE_signif, 1.0, 0.1)
-        x_init1 <- X[, 1, 1]
-        x_init2 <- X[, 2, 1]
+        # Interactive plotting session
 
-        readline(prompt="Press [enter] to see the next plot")
-        graphics::plot(x_init1, FE_hat[, 1], main = paste("Fixed Effects vs. Initial", component_names[1]), xlab = paste(component_names[1], "at t0"), ylab = paste("FE (", component_names[1], ")", sep = ""), pch = 19, cex = cex_vals_fe)
-        graphics::abline(h = 0)
-        graphics::grid()
-        if (!is.null(label_names) && length(label_names) == nObs) {
-            graphics::text(x_init1, FE_hat[, 1], labels = label_names, cex = 0.5, pos = 4, col = "red")
-        }
+        # Vector Field plot
+        plot_vf()
         
-        readline(prompt="Press [enter] to see the next plot")
-        graphics::plot(x_init2, FE_hat[, 2], main = paste("Fixed Effects vs. Initial", component_names[2]), xlab = paste(component_names[2], "at t0"), ylab = paste("FE (", component_names[2], ")", sep = ""), pch = 19, cex = cex_vals_fe)
-        graphics::abline(h = 0)
-        graphics::grid()
-        if (!is.null(label_names) && length(label_names) == nObs) {
-            graphics::text(x_init2, FE_hat[, 2], labels = label_names, cex = 0.5, pos = 4, col = "red")
-        }
-        
-    }
+        # FE plots
+        if (!is.null(FE_hat)) {
+            cex_vals_fe <- ifelse(FE_signif, 1.0, 0.1)
+            x_init1 <- X[, 1, 1]
+            x_init2 <- X[, 2, 1]
 
-    # TE plots with bootstrap bands
-    if (!is.null(TE_hat)) {
-        cex_vals_te <- ifelse(TE_signif, 1.0, 0.1)
-        TE_quantiles <- apply(TE_bootstrap, c(1, 2), stats::quantile, probs = c(0.025, 0.975), na.rm = TRUE)
-        lower_bound <- TE_quantiles[1, , ]
-        upper_bound <- TE_quantiles[2, , ]
+            readline(prompt="Press [enter] to see the next plot")
+            graphics::plot(x_init1, FE_hat[, 1], main = paste("Fixed Effects vs. Initial", component_names[1]), xlab = paste(component_names[1], "at t0"), ylab = paste("FE (", component_names[1], ")", sep = ""), pch = 19, cex = cex_vals_fe)
+            graphics::abline(h = 0)
+            graphics::grid()
+            if (!is.null(label_names) && length(label_names) == nObs) {
+                graphics::text(x_init1, FE_hat[, 1], labels = label_names, cex = 0.5, pos = 4, col = "red")
+            }
+            
+            readline(prompt="Press [enter] to see the next plot")
+            graphics::plot(x_init2, FE_hat[, 2], main = paste("Fixed Effects vs. Initial", component_names[2]), xlab = paste(component_names[2], "at t0"), ylab = paste("FE (", component_names[2], ")", sep = ""), pch = 19, cex = cex_vals_fe)
+            graphics::abline(h = 0)
+            graphics::grid()
+            if (!is.null(label_names) && length(label_names) == nObs) {
+                graphics::text(x_init2, FE_hat[, 2], labels = label_names, cex = 0.5, pos = 4, col = "red")
+            }
+            
+        }
 
-        # Component 1
-        readline(prompt="Press [enter] to see the next plot")
-        y1_range <- range(c(lower_bound[, 1], upper_bound[, 1], TE_hat[, 1]), na.rm = TRUE)
-        graphics::plot(years[2:nT], TE_hat[, 1], main = paste("Time Effects (", component_names[1], ")", sep = ""), xlab = "time", ylab = paste("TE (", component_names[1], ")", sep = ""), type = "n", ylim = y1_range)
-        graphics::polygon(c(years[2:nT], rev(years[2:nT])), c(lower_bound[, 1], rev(upper_bound[, 1])), col = "grey80", border = NA)
-        graphics::grid()
-        graphics::abline(h = 0)
-        graphics::lines(years[2:nT], TE_hat[, 1], pch = 19, cex = cex_vals_te, type = "b")
-        
-        # Component 2
-        readline(prompt="Press [enter] to see the next plot")
-        y2_range <- range(c(lower_bound[, 2], upper_bound[, 2], TE_hat[, 2]), na.rm = TRUE)
-        graphics::plot(years[2:nT], TE_hat[, 2], main = paste("Time Effects (", component_names[2], ")", sep = ""), xlab = "time", ylab = paste("TE (", component_names[2], ")", sep = ""), type = "n", ylim = y2_range)
-        graphics::polygon(c(years[2:nT], rev(years[2:nT])), c(lower_bound[, 2], rev(upper_bound[, 2])), col = "grey80", border = NA)
-        graphics::grid()
-        graphics::abline(h = 0)
-        graphics::lines(years[2:nT], TE_hat[, 2], pch = 19, cex = cex_vals_te, type = "b")
-        
+        # TE plots with bootstrap bands
+        if (!is.null(TE_hat)) {
+            cex_vals_te <- ifelse(TE_signif, 1.0, 0.1)
+            TE_quantiles <- apply(TE_bootstrap, c(1, 2), stats::quantile, probs = c(0.025, 0.975), na.rm = TRUE)
+            lower_bound <- TE_quantiles[1, , ]
+            upper_bound <- TE_quantiles[2, , ]
+
+            # Component 1
+            readline(prompt="Press [enter] to see the next plot")
+            y1_range <- range(c(lower_bound[, 1], upper_bound[, 1], TE_hat[, 1]), na.rm = TRUE)
+            graphics::plot(years[2:nT], TE_hat[, 1], main = paste("Time Effects (", component_names[1], ")", sep = ""), xlab = "time", ylab = paste("TE (", component_names[1], ")", sep = ""), type = "n", ylim = y1_range)
+            graphics::polygon(c(years[2:nT], rev(years[2:nT])), c(lower_bound[, 1], rev(upper_bound[, 1])), col = "grey80", border = NA)
+            graphics::grid()
+            graphics::abline(h = 0)
+            graphics::lines(years[2:nT], TE_hat[, 1], pch = 19, cex = cex_vals_te, type = "b")
+            
+            # Component 2
+            readline(prompt="Press [enter] to see the next plot")
+            y2_range <- range(c(lower_bound[, 2], upper_bound[, 2], TE_hat[, 2]), na.rm = TRUE)
+            graphics::plot(years[2:nT], TE_hat[, 2], main = paste("Time Effects (", component_names[2], ")", sep = ""), xlab = "time", ylab = paste("TE (", component_names[2], ")", sep = ""), type = "n", ylim = y2_range)
+            graphics::polygon(c(years[2:nT], rev(years[2:nT])), c(lower_bound[, 2], rev(upper_bound[, 2])), col = "grey80", border = NA)
+            graphics::grid()
+            graphics::abline(h = 0)
+            graphics::lines(years[2:nT], TE_hat[, 2], pch = 19, cex = cex_vals_te, type = "b")
+            
+        }
     }
 
     cat("Plotting finished.\n")

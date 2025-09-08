@@ -10,3 +10,6 @@ datasets/.Rapp.history
 *.eps
 
 .Rproj.user
+
+# Exclude test pictures directories
+test_pics_*/

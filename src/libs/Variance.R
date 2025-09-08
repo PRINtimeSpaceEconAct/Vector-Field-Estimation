@@ -203,6 +203,10 @@ bootstrapPanelVF <- function(result, B = 500) {
 
         # Re-estimate using the bootstrapped data
         # All original estimation parameters are passed through
+        # Propagate numerical stabilization params if present
+        ridge_param <- if (!is.null(result$ridge_param)) result$ridge_param else 1e-5
+        rcond_threshold <- if (!is.null(result$rcond_threshold)) result$rcond_threshold else 1e-3
+
         est_star <- estimate_panel_vf(
             X = X_star,
             x = x_eval,
@@ -213,7 +217,9 @@ bootstrapPanelVF <- function(result, B = 500) {
             kernel.type = kernel.type,
             method.h = method.h,
             chunk_size = chunk_size,
-            gc = gc
+            gc = gc,
+            ridge_param = ridge_param,
+            rcond_threshold = rcond_threshold
         )
         effects <- get_effects(est_star, X_obs = X0_raw, FE = result$FE, TE = result$TE)
         alpha_i_hat <- effects$alpha_i
@@ -245,25 +251,51 @@ bootstrapPanelVF <- function(result, B = 500) {
 #' @return A logical vector indicating significance for each evaluation point (length nEval),
 #'         where TRUE means the point has a significant vector field direction
 significanceBootstrap <- function(result, bootstrapSamples, p_crit=0.05){
-   
-    nEval = nrow(result)
-    estConfInt = matrix(NA, nrow=nEval, ncol=2)
-    
+
+    # Coerce result to matrix to ensure nrow/ncol work reliably
+    result <- as.matrix(result)
+    nEval <- nrow(result)
+    estConfInt <- matrix(NA, nrow = nEval, ncol = 2)
+
+    # Normalize bootstrapSamples to 3D array [nEval x 2 x B]
+    if (is.null(bootstrapSamples)) {
+        return(rep(FALSE, nEval))
+    }
+
+    bs_dims <- dim(bootstrapSamples)
+    if (length(bs_dims) == 2) {
+        # Treat as single-replicate bootstrap and expand dims
+        if (bs_dims[1] != nEval || bs_dims[2] != 2) {
+            stop("bootstrapSamples has unexpected shape; expected [nEval x 2 x B] or [nEval x 2]")
+        }
+        bootstrapSamples <- array(bootstrapSamples, dim = c(bs_dims[1], bs_dims[2], 1))
+    } else if (length(bs_dims) != 3) {
+        stop("bootstrapSamples must be a 3D array [nEval x 2 x B]")
+    }
+
     # Identify where we can calculate directional vectors (non-zero and non-NaN values)
-    whereEst = (result[,1]!=0 & result[,2]!=0) & (!is.nan(result[,1]) & !is.nan(result[,2]))
-    whereEstInd = which(whereEst)
-    
-    # Calculate significance based on bootstrap distribution
-    estConfInt[whereEstInd,1] = sapply(whereEstInd, function(i) max(mean(bootstrapSamples[i,1,]<0,na.rm=T),mean(bootstrapSamples[i,1,]>0,na.rm=T)) )
-    estConfInt[whereEstInd,2] = sapply(whereEstInd, function(i) max(mean(bootstrapSamples[i,2,]<0,na.rm=T),mean(bootstrapSamples[i,2,]>0,na.rm=T)) )
+    whereEst <- (result[, 1] != 0 & result[, 2] != 0) & (!is.nan(result[, 1]) & !is.nan(result[, 2]))
+    whereEstInd <- which(whereEst)
+
+    if (length(whereEstInd) > 0) {
+        # Calculate significance based on bootstrap distribution
+        estConfInt[whereEstInd, 1] <- sapply(whereEstInd, function(i) {
+            max(mean(bootstrapSamples[i, 1, ] < 0, na.rm = TRUE),
+                mean(bootstrapSamples[i, 1, ] > 0, na.rm = TRUE))
+        })
+        estConfInt[whereEstInd, 2] <- sapply(whereEstInd, function(i) {
+            max(mean(bootstrapSamples[i, 2, ] < 0, na.rm = TRUE),
+                mean(bootstrapSamples[i, 2, ] > 0, na.rm = TRUE))
+        })
+    }
 
     # If all bootstrap samples are NA, set to non-significant
-    estConfInt[is.na(estConfInt)] = FALSE
+    estConfInt[is.na(estConfInt)] <- FALSE
 
     # Consider significant only if at least one component is significant
-    signifEst = rowSums(estConfInt>(1-p_crit)) >= 1
-    
-    return(signifEst) 
+    signifEst <- rowSums(estConfInt > (1 - p_crit)) >= 1
+
+    return(signifEst)
 }
 
 

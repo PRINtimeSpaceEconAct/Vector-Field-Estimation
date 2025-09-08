@@ -17,8 +17,18 @@ listN <- function(...){
 #' 
 #' @return A matrix of evaluation points arranged in a grid (nEval x 2)
 defineEvalPoints <- function(X,nEval){
-    xGrid = seq(from=min(X[,1])*0.9, to=max(X[,1])*1.1, length.out=round(sqrt(nEval)))
-    yGrid = seq(from=min(X[,2])*0.9, to=max(X[,2])*1.1, length.out=round(sqrt(nEval)))
+    min1 <- min(X[,1])
+    max1 <- max(X[,1])
+    min2 <- min(X[,2])
+    max2 <- max(X[,2])
+
+    from1 <- ifelse(min1 >= 0, min1 * 0.9, min1 * 1.1)
+    to1   <- ifelse(max1 >= 0, max1 * 1.1, max1 * 0.9)
+    from2 <- ifelse(min2 >= 0, min2 * 0.9, min2 * 1.1)
+    to2   <- ifelse(max2 >= 0, max2 * 1.1, max2 * 0.9)
+
+    xGrid = seq(from=from1, to=to1, length.out=round(sqrt(nEval)))
+    yGrid = seq(from=from2, to=to2, length.out=round(sqrt(nEval)))
     x = as.matrix(expand.grid(xGrid,yGrid))
     return(x)
 }
@@ -30,7 +40,13 @@ defineEvalPoints <- function(X,nEval){
 #'
 #' @return A vector of evaluation points
 defineEvalPoints1d <- function(X, nEval) {
-    xGrid <- seq(from = min(X) * 0.9, to = max(X) * 1.1, length.out = nEval)
+    minX <- min(X)
+    maxX <- max(X)
+
+    from <- ifelse(minX >= 0, minX * 0.9, minX * 1.1)
+    to   <- ifelse(maxX >= 0, maxX * 1.1, maxX * 0.9)
+
+    xGrid <- seq(from = from, to = to, length.out = nEval)
     return(xGrid)
 }
 
