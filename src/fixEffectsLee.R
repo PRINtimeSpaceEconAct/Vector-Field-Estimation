@@ -9,13 +9,20 @@ library(fields)
 library(sm)
 
 # Parameters ----
-nObs = 500  # Number of cross-sectional units
+nObs = 200  # Number of cross-sectional units
 nT = 20     # Number of time periods for transitions
-nEval = 1024  # Number of evaluation points for VF estimation
+nEval = 2500  # Number of evaluation points for VF estimation
 output_dir <- "test_pics_NonLinearSingleWell"
 
+lengthArrows <- 0.1
+
+# Rotation parameters
+theta <- pi/3  # Rotation angle in radians (pi/3 = 60 degrees)
+rotation_strength <- 1  # Overall scaling of the rotation
+
+
 # Data generation ----
-set.seed(3)  # For reproducibility
+set.seed(1)  # For reproducibility
 
 # Generate fixed effects (FE) - unit-specific heterogeneity  
 #alpha_i = mvrnorm(nObs, mu=c(0,0), Sigma=0.01*diag(2))
@@ -32,41 +39,62 @@ gamma_t = matrix(0,nrow=nT,ncol=2)
 
 
 # Initial conditions with FE and TE
-X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 0.25*diag(2)) + alpha_i + array(rep(gamma_t[1,],each=nObs),dim=c(nObs,2))
+X0 = mvrnorm(nObs, mu=c(0,0),Sigma = 0.5*diag(2)) + alpha_i + array(rep(gamma_t[1,],each=nObs),dim=c(nObs,2))
 X = array(NA,dim = c(nObs,2,nT+1))
 X[,,1] = X0
 
 # example 1 - double well ----
-# VF <- function(X){
-#     # X = (x,y)
-#     # U(X) = x^4 - x^2 + y^2
-#     # VF(X) = -grad U(X) = -(4x^3 - 2x, 2y)
-#     return( -0.05*c(4*X[1]^3 - 4*X[1], 3*X[2]) )
-# }
-
-# example 2 - non-linear single well ----
 VF <- function(X){
     # X = (x,y)
-    # U(X) = x^4 + y^4
-    # VF(X) = -grad U(X) = -(4x^3, 4y^3)
-    return( -0.05*c(4*X[1]^3, 4*X[2]^3) )
+    # U(X) = y^4 - y^2 + x^2  (swapped from x^4 - x^2 + y^2)
+    # VF(X) = -grad U(X) = -(2x, 4y^3 - 2y)
+    return( -0.1*c(2*X[1], 4*X[2]^3 - 2*X[2]) )
 }
 
-# example 3 - simple counterclockwise rotation around origin ----
+# example 2 - non-linear single well ----
 # VF <- function(X){
 #     # X = (x,y)
-#     # Simple counterclockwise rotation around origin
-#     # VF(x,y) = (-y, x) gives counterclockwise rotation
-#     
-#     return( 0.1 * c(-X[2], X[1]) )
+#     # U(X) = x^4 + y^4
+#     # VF(X) = -grad U(X) = -(4x^3, 4y^3)
+#     return( -0.05*c(4*X[1]^3, 4*X[2]^3) )
 # }
+
+#example 3 - parameterized rotation around origin ----
+# VF <- function(X){
+#     # X = (x,y)
+#     # Standard 2D rotation of vector (x,y) by angle theta
+#     # VF(x,y) = rotation_strength * (x*cos(θ) - y*sin(θ), x*sin(θ) + y*cos(θ))
+# 
+#     x <- X[1]
+#     y <- X[2]
+# 
+#     vf_x <- rotation_strength * (cos(theta) * x - sin(theta) * y)
+#     vf_y <- rotation_strength * (sin(theta) * x + cos(theta) * y)
+# 
+#     return(c(vf_x, vf_y))
+# }
+
+VF_jacobian <- function(X){
+    # X = (x,y)
+    # VF(x,y) = -0.1 * (2x, 4y^3 - 2y)
+    # J_11 = ∂(vf_x)/∂x = -0.2
+    # J_12 = ∂(vf_x)/∂y = 0
+    # J_21 = ∂(vf_y)/∂x = 0
+    # J_22 = ∂(vf_y)/∂y = -0.1 * (12y^2 - 2)
+    J_11 <- -0.2
+    J_12 <- 0
+    J_21 <- 0
+    J_22 <- -0.1 * (12 * X[2]^2 - 2)
+    return(matrix(c(J_11, J_12, J_21, J_22), nrow=2, byrow=TRUE))
+}
 
 # Generate panel data with FE, TE, and vector field dynamics ----
 noise = array(rnorm(nObs*nT*2, sd = 0.01), dim=c(nObs,2,nT))
 for (t in 1:nT){
     # X_{t+1} = X_t + VF(X_t) + FE + TE + noise
+    vf_values <- t(apply(X[,,t, drop=FALSE], 1, VF))
     X[,,t+1] = X[,,t] + 
-               t(apply(X[,,t], 1, VF)) +  # Vector field dynamics
+               vf_values +  # Vector field dynamics
                alpha_i +                   # Fixed effects  
                array(rep(gamma_t[t,], each=nObs), dim=c(nObs,2)) +  # Time effects
                noise[,,t]                  # Random noise
@@ -90,6 +118,21 @@ for (i in 1:nObs) {
 # Combine all data
 panel_data_df <- do.call(rbind, data_list)
 
+# --- Data Filtering Step ---
+# Identify individuals (units) that have non-finite values (NaN, Inf) in their history
+ids_with_non_finite <- unique(panel_data_df$id[!is.finite(panel_data_df$X1) | !is.finite(panel_data_df$X2)])
+
+if (length(ids_with_non_finite) > 0) {
+  cat(sprintf("\n--- Data Filtering ---\n"))
+  cat(sprintf("Found %d individuals with non-finite values. Removing their full histories from the dataset.\n", length(ids_with_non_finite)))
+  
+  # Filter out the problematic individuals
+  panel_data_df <- panel_data_df[!(panel_data_df$id %in% ids_with_non_finite), ]
+  
+  cat(sprintf("Remaining individuals: %d\n\n", length(unique(panel_data_df$id))))
+}
+
+
 # Create panel data structure using plm  
 panel_data <- pdata.frame(panel_data_df, index = c("id", "time"))
 
@@ -101,7 +144,8 @@ cat("\n--- Generating True Vector Field Reference Plot ---\n")
 # Create evaluation points (same method as in runPanelVFAnalysis)
 X_unrolled <- aperm(X, c(1, 3, 2))
 dim(X_unrolled) <- c(nObs * (nT+1), 2)  # X has nT+1 time periods
-x_eval_true <- defineEvalPoints(X_unrolled, nEval)
+X_unrolled_finite <- X_unrolled[is.finite(X_unrolled[,1]) & is.finite(X_unrolled[,2]),]
+x_eval_true <- defineEvalPoints(X_unrolled_finite, nEval)
 
 # Compute true vector field on evaluation points
 VF_true_eval <- t(apply(x_eval_true, 1, VF))
@@ -109,7 +153,6 @@ VF_true_eval <- t(apply(x_eval_true, 1, VF))
 # Prepare data for plotting (using same settings as plotPanelVFAnalysis)
 timeInterval <- 1
 component_names <- c("X1", "X2")
-lengthArrows <- 1
 rescale <- FALSE  # Following the same setting as in the loop
 
 # Create the plot
@@ -121,7 +164,7 @@ par(mar = c(4, 4, 3, 2))
 plot(x_eval_true, type = "n",
      xlab = component_names[1],
      ylab = component_names[2],
-     main = "True Vector Field - Non-Linear Single Well")
+     main = "True Vector Field - Double Well Potential (X/Y Swapped)")
 
 if(rescale) {
   abline(h = 1, lty = 3)
@@ -138,19 +181,23 @@ arrows(x_eval_true[, 1], x_eval_true[, 2],
        angle = 15, col = "blue", length = 0.05)
 
 # Add observed data points
-X0_plot <- X[,,2]  # Final conditions
-points(X0_plot[, 1], X0_plot[, 2], pch = 19, col = "red", cex = 0.5)
+# Reshape X to have all points in a single 2D matrix for density calculation
+points_for_density <- matrix(aperm(X, c(1, 3, 2)), ncol = dim(X)[2])
+# points(points_for_density[, 1], points_for_density[, 2], pch = 19, col = "red", cex = 0.5)
 
 # Add density contours if sm package is available
 if (requireNamespace("sm", quietly = TRUE)) {
-  X0_complete <- X0_plot[complete.cases(X0_plot), ]
-  if(nrow(X0_complete) > 1) {
+  points_for_density_complete <- points_for_density[complete.cases(points_for_density), ]
+  if(nrow(points_for_density_complete) > 1) {
     tryCatch({
-      est.dens <- sm::sm.density(X0_complete, display = "none")
+      # Let sm.density create its own evaluation grid, which is compatible with contour
+      est.dens <- sm::sm.density(points_for_density_complete, display = "none")
       contour(est.dens$eval.points[, 1], est.dens$eval.points[, 2], est.dens$estimate,
               add = TRUE, col = "purple")
     }, error = function(e) {
       # Skip density contours if they fail
+      cat("Error during density contour plotting:\n")
+      print(e)
     })
   }
 }
@@ -158,13 +205,13 @@ if (requireNamespace("sm", quietly = TRUE)) {
 dev.off()
 
 cat(sprintf("True vector field plot saved to: %s\n", file.path(output_dir, "True_VectorField.svg")))
-cat("Blue arrows: True non-linear single well vector field\n")
-cat("Red points: Initial conditions\n")
-cat("Purple contours: Data density\n\n")
+cat("Blue arrows: True double well vector field (X/Y swapped)\n")
+cat("Red points: Observed data points (all time steps)\n")
+cat("Purple contours: Data density (all points)\n\n")
 
 ## Panel Vector Field Analysis (Modern Approach) ----
 # Test different kernel types and parameters following VFLifeExpectancyFE.R structure
-kernels_to_test <- c("epa")
+kernels_to_test <- c("gauss")
 ridge_params_to_test <- c(1e-6)
 rcond_thresholds_to_test <- c(1e-4)
 
@@ -191,13 +238,17 @@ for (kernel in kernels_to_test) {
                                              nEval = nEval,
                                              FE = TRUE,
                                              TE = TRUE,
-                                             uniform_weights = TRUE,
+                                             uniform_weights = FALSE,
                                              kernel.type = kernel,
-                                             method.h = "silverman",
+                                            #method.h = "silverman",
+                                            # estimation_method = "LL",
+                                            #  method.h = NULL,
+                                              h=0.6,
                                              chunk_size = 1024,
                                              bootstrap_B = 1, 
                                              ridge_param = ridge,
-                                             rcond_threshold = rcond_thresh)
+                                             rcond_threshold = rcond_thresh,
+                                             adaptive = TRUE)
       
       # Plot results using the modern approach
       plotPanelVFAnalysis(analysis_results,
@@ -207,8 +258,63 @@ for (kernel in kernels_to_test) {
                           years = 1:(nT+1),
                           label_names = paste0("unit_", 1:nObs),
                           component_names = c("X1", "X2"),
-                                                                    save_plots = TRUE,
-                                          save_path = output_dir)
+                          save_plots = TRUE,
+                          save_path = output_dir,
+                          lengthArrows = lengthArrows)
+      
+      # evaluation points
+      x_eval <- analysis_results$x
+      
+      # --- Comparison of VF derivatives ---
+      if (analysis_results$FE || analysis_results$TE) {
+          
+          VF_der_hat <- analysis_results$VF_derivatives_hat
+          grad_F1_hat <- VF_der_hat$d1
+          grad_F2_hat <- VF_der_hat$d2
+          
+          # Compute true derivatives
+          VF_jac_true <- t(apply(x_eval, 1, VF_jacobian))
+          grad_F1_true <- VF_jac_true[, c(1, 3)]
+          grad_F2_true <- VF_jac_true[, c(2, 4)]
+          
+          # Arrow plot for grad(F1)
+          svg(file.path(output_dir, paste0("VF_GradF1_Comparison_", filename)), width = 12, height = 6)
+          par(mfrow=c(1,2), mar=c(4, 4, 3, 2))
+          
+          # Left plot: True grad(F1)
+          plot(x_eval, type = "n", main = "True grad(F1)", xlab="X1", ylab="X2")
+          arrows(x_eval[, 1], x_eval[, 2],
+                 x_eval[, 1] + lengthArrows * grad_F1_true[, 1],
+                 x_eval[, 2] + lengthArrows * grad_F1_true[, 2],
+                 angle = 15, col = "blue", length = 0.05)
+          
+          # Right plot: Estimated grad(F1)
+          plot(x_eval, type = "n", main = "Estimated grad(F1)", xlab="X1", ylab="X2")
+          arrows(x_eval[, 1], x_eval[, 2],
+                 x_eval[, 1] + lengthArrows * grad_F1_hat[, 1],
+                 x_eval[, 2] + lengthArrows * grad_F1_hat[, 2],
+                 angle = 15, col = "blue", length = 0.05)
+          dev.off()
+          
+          # Arrow plot for grad(F2)
+          svg(file.path(output_dir, paste0("VF_GradF2_Comparison_", filename)), width = 12, height = 6)
+          par(mfrow=c(1,2), mar=c(4, 4, 3, 2))
+          
+          # Left plot: True grad(F2)
+          plot(x_eval, type = "n", main = "True grad(F2)", xlab="X1", ylab="X2")
+          arrows(x_eval[, 1], x_eval[, 2],
+                 x_eval[, 1] + lengthArrows * grad_F2_true[, 1],
+                 x_eval[, 2] + lengthArrows * grad_F2_true[, 2],
+                 angle = 15, col = "blue", length = 0.05)
+          
+          # Right plot: Estimated grad(F2)
+          plot(x_eval, type = "n", main = "Estimated grad(F2)", xlab="X1", ylab="X2")
+          arrows(x_eval[, 1], x_eval[, 2],
+                 x_eval[, 1] + lengthArrows * grad_F2_hat[, 1],
+                 x_eval[, 2] + lengthArrows * grad_F2_hat[, 2],
+                 angle = 15, col = "blue", length = 0.05)
+          dev.off()
+      }
       
       # --- Comparison Analysis: True vs Estimated ---
       
@@ -216,7 +322,6 @@ for (kernel in kernels_to_test) {
       dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
       
       # 1) Vector field comparison on evaluation points
-      x_eval <- analysis_results$x
       VF_hat <- analysis_results$VF_hat
       
       # Compute true vector field on evaluation points
@@ -228,11 +333,22 @@ for (kernel in kernels_to_test) {
       # Calculate norm (magnitude) of the vector difference
       VF_norm_diff <- sqrt(VF_diff[,1]^2 + VF_diff[,2]^2)
       
-      # Remove NaN and infinite values from norm differences
-      VF_norm_diff[is.nan(VF_norm_diff) | is.infinite(VF_norm_diff)] <- NA
+      # Calculate relative norm difference
+      VF_norm_true <- sqrt(VF_true[,1]^2 + VF_true[,2]^2)
+      VF_norm_rel_diff <- VF_norm_diff / VF_norm_true
       
-      # Create heatmap of norm differences
-      # The evaluation points form a regular grid: round(sqrt(nEval)) x round(sqrt(nEval))
+      # Handle special values for absolute differences
+      VF_norm_diff[is.nan(VF_norm_diff) | is.infinite(VF_norm_diff)] <- NA
+      VF_norm_diff_log <- log10(VF_norm_diff)
+      VF_norm_diff_log[is.infinite(VF_norm_diff_log)] <- NA # Replace -Inf with NA
+      
+      # Handle special values for relative differences, similar to testVF.R
+      VF_norm_rel_diff[is.na(VF_norm_rel_diff) | !is.finite(VF_norm_rel_diff)] <- NA
+      VF_norm_rel_diff_log <- log10(VF_norm_rel_diff)
+      VF_norm_rel_diff_log[is.infinite(VF_norm_rel_diff_log)] <- NA # Replace -Inf with NA
+      
+      # Create heatmaps
+      # The evaluation points form a regular grid
       grid_size <- round(sqrt(nEval))
       actual_nEval <- grid_size^2
       
@@ -242,45 +358,54 @@ for (kernel in kernels_to_test) {
       x_sorted <- sort(x_unique)
       y_sorted <- sort(y_unique)
       
-      # Reshape norm differences into grid format for visualization
-      VF_norm_diff_grid <- matrix(VF_norm_diff[1:actual_nEval], nrow = grid_size, ncol = grid_size, byrow = TRUE)
+      # Reshape norm differences into grid format
+      VF_norm_diff_grid <- matrix(VF_norm_diff_log[1:actual_nEval], nrow = grid_size, ncol = grid_size, byrow = TRUE)
+      VF_norm_rel_diff_grid <- matrix(VF_norm_rel_diff_log[1:actual_nEval], nrow = grid_size, ncol = grid_size, byrow = TRUE)
       
-      # Check for problematic values in the grid
-      n_na_grid <- sum(is.na(VF_norm_diff_grid))
-      if (n_na_grid > 0) {
-        cat(sprintf("  - Note: %d/%d grid points contain NA values\n", n_na_grid, actual_nEval))
+      # Create a single SVG with two plots
+      svg(file.path(output_dir, paste0("VF_NormDiff_", filename)), width = 14, height = 6)
+      
+      # Use layout to give more space to the right plot
+      layout(matrix(c(1, 2), nrow = 1), widths = c(1, 1.4))
+      par(mar = c(4, 4, 3, 3))
+      
+      # 1) Absolute difference heatmap
+      image.plot(x_sorted, y_sorted, VF_norm_diff_grid, 
+                 main = "Absolute Difference (log10)",
+                 xlab = "X1", ylab = "X2")
+      
+      # 2) Relative difference heatmap with percentage scale
+      zlim_rel <- range(VF_norm_rel_diff_grid, na.rm = TRUE)
+      rel_percent_vals <- 100 * VF_norm_rel_diff
+      rel_percent_vals <- rel_percent_vals[is.finite(rel_percent_vals) & rel_percent_vals > 0]
+      min_rel_p <- if (length(rel_percent_vals)) min(rel_percent_vals) else 0.1
+      max_rel_p <- if (length(rel_percent_vals)) max(rel_percent_vals) else 100
+      if (!is.finite(min_rel_p) || min_rel_p <= 0) min_rel_p <- 0.1
+      if (!is.finite(max_rel_p) || max_rel_p <= min_rel_p) max_rel_p <- min_rel_p * 10
+      candidate_perc <- c(0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000)
+      breaks_perc <- candidate_perc[candidate_perc >= min_rel_p & candidate_perc <= max_rel_p]
+      if (length(breaks_perc) < 3) {
+        breaks_perc <- unique(sort(c(min_rel_p, breaks_perc, max_rel_p)))
       }
+      breaks_log <- log10(breaks_perc / 100)
+      labels_rel <- paste0(formatC(breaks_perc, format = "fg", digits = 3), "%")
       
-      svg(file.path(output_dir, paste0("VF_NormDiff_", filename)), width = 8, height = 8)
-      par(mar = c(4, 4, 3, 2))
-      
-      # Single heatmap showing norm of vector difference
-      image(x_sorted, y_sorted, VF_norm_diff_grid, 
-            main = "Vector Field Norm Difference ||Estimated - True||",
-            xlab = "X1", ylab = "X2", col = heat.colors(100, rev = TRUE),
-            useRaster = TRUE)
-      
-      # Add contour lines only if there's sufficient variation in the data
-      points_range <- range(VF_norm_diff_grid, na.rm = TRUE)
-      if (!is.na(points_range[1]) && !is.na(points_range[2]) && 
-          points_range[2] > points_range[1] && 
-          (points_range[2] - points_range[1]) > .Machine$double.eps) {
-        tryCatch({
-          contour(x_sorted, y_sorted, VF_norm_diff_grid, add = TRUE, 
-                  nlevels = 6, col = "black", lwd = 0.5)
-        }, error = function(e) {
-          # If contour fails, just skip it silently
-          cat("  - Warning: Could not add contour lines to heatmap\n")
-        })
-      }
-      
-      # Add range information
-      mtext(sprintf("Range: [%.6f, %.6f]", points_range[1], points_range[2]), 
-            side = 1, line = 2.5, cex = 0.8, col = "darkblue")
-      
-      dev.off()
-      
-      # 2) Fixed and time effects comparison
+      # Increase bottom margin for horizontal legend on this panel only
+      par(mar = c(6, 4, 3, 3))
+      image.plot(x_sorted, y_sorted, VF_norm_rel_diff_grid, 
+                 main = "Relative Difference (% of |V_true|)",
+                 xlab = "X1", ylab = "X2",
+                 zlim = zlim_rel,
+                 horizontal = TRUE,
+                 legend.shrink = 0.95,
+                 legend.width = 1.6,
+                 legend.mar = 4,
+                 axis.args = list(at = breaks_log, labels = labels_rel, cex.axis = 0.9),
+                 legend.args = list(text = "Relative error (%)", side = 1, line = 2.2, cex = 0.9))
+       
+       dev.off()
+       
+       # 2) Fixed and time effects comparison
       FE_hat <- analysis_results$FE_hat
       TE_hat <- analysis_results$TE_hat
       
@@ -343,98 +468,98 @@ for (kernel in kernels_to_test) {
         )
       )
       
-      # Save summary statistics to file in a more readable format
-      stats_filename <- file.path(output_dir, paste0("Summary_Stats_", gsub("\\.svg$", ".txt", filename)))
-      
-      # Create a nicely formatted text output
-      cat("=== VECTOR FIELD ESTIMATION COMPARISON STATISTICS ===\n\n", file = stats_filename)
-      cat("Parameters:\n", file = stats_filename, append = TRUE)
-      cat(sprintf("  Kernel: %s\n", kernel), file = stats_filename, append = TRUE)
-      cat(sprintf("  Ridge parameter: %g\n", ridge), file = stats_filename, append = TRUE)
-      cat(sprintf("  Condition threshold: %g\n", rcond_thresh), file = stats_filename, append = TRUE)
-      cat(sprintf("  Number of observations: %d\n", nObs), file = stats_filename, append = TRUE)
-      cat(sprintf("  Number of time periods: %d\n", nT), file = stats_filename, append = TRUE)
-      cat(sprintf("  Number of evaluation points: %d\n", nEval), file = stats_filename, append = TRUE)
-      cat("\n", file = stats_filename, append = TRUE)
-      
-      # Vector Field Statistics
-      cat("VECTOR FIELD NORM DIFFERENCES ||Estimated - True||:\n", file = stats_filename, append = TRUE)
-      cat(sprintf("  Valid observations: %d / %d (%.1f%%)\n",
-                  stats_summary$VF_norm_differences$n_valid,
-                  stats_summary$VF_norm_differences$n_total,
-                  100 * stats_summary$VF_norm_differences$n_valid / stats_summary$VF_norm_differences$n_total), 
-          file = stats_filename, append = TRUE)
-      cat(sprintf("  Mean: %12.8f | SD: %12.8f | RMSE: %12.8f | MAE: %12.8f\n",
-                  stats_summary$VF_norm_differences$mean,
-                  stats_summary$VF_norm_differences$sd,
-                  stats_summary$VF_norm_differences$rmse,
-                  stats_summary$VF_norm_differences$mae), file = stats_filename, append = TRUE)
-      cat(sprintf("  Min: %12.8f | Max: %12.8f\n",
-                  stats_summary$VF_norm_differences$min,
-                  stats_summary$VF_norm_differences$max), file = stats_filename, append = TRUE)
-      
-      # Add warning if many invalid values
-      if (stats_summary$VF_norm_differences$n_valid < 0.9 * stats_summary$VF_norm_differences$n_total) {
-        cat("  WARNING: Significant number of NaN/Inf values detected!\n", file = stats_filename, append = TRUE)
-      }
-      cat("\n", file = stats_filename, append = TRUE)
-      
-      # Fixed Effects Statistics (if available)
-      if (!is.null(stats_summary$FE_norm_differences)) {
-        cat("FIXED EFFECTS NORM DIFFERENCES ||Estimated - True||:\n", file = stats_filename, append = TRUE)
-        cat(sprintf("  Valid observations: %d / %d (%.1f%%)\n",
-                    stats_summary$FE_norm_differences$n_valid,
-                    stats_summary$FE_norm_differences$n_total,
-                    100 * stats_summary$FE_norm_differences$n_valid / stats_summary$FE_norm_differences$n_total), 
-            file = stats_filename, append = TRUE)
-        cat(sprintf("  Mean: %12.8f | SD: %12.8f | RMSE: %12.8f | MAE: %12.8f\n",
-                    stats_summary$FE_norm_differences$mean,
-                    stats_summary$FE_norm_differences$sd,
-                    stats_summary$FE_norm_differences$rmse,
-                    stats_summary$FE_norm_differences$mae), file = stats_filename, append = TRUE)
-        cat(sprintf("  Min: %12.8f | Max: %12.8f\n",
-                    stats_summary$FE_norm_differences$min,
-                    stats_summary$FE_norm_differences$max), file = stats_filename, append = TRUE)
-        
-        # Add warning if many invalid values
-        if (stats_summary$FE_norm_differences$n_valid < 0.9 * stats_summary$FE_norm_differences$n_total) {
-          cat("  WARNING: Significant number of NaN/Inf values detected!\n", file = stats_filename, append = TRUE)
-        }
-        cat("\n", file = stats_filename, append = TRUE)
-      } else {
-        cat("FIXED EFFECTS: Not estimated\n\n", file = stats_filename, append = TRUE)
-      }
-      
-      # Time Effects Statistics (if available)
-      if (!is.null(stats_summary$TE_norm_differences)) {
-        cat("TIME EFFECTS NORM DIFFERENCES ||Estimated - True||:\n", file = stats_filename, append = TRUE)
-        cat(sprintf("  Valid observations: %d / %d (%.1f%%)\n",
-                    stats_summary$TE_norm_differences$n_valid,
-                    stats_summary$TE_norm_differences$n_total,
-                    100 * stats_summary$TE_norm_differences$n_valid / stats_summary$TE_norm_differences$n_total), 
-            file = stats_filename, append = TRUE)
-        cat(sprintf("  Mean: %12.8f | SD: %12.8f | RMSE: %12.8f | MAE: %12.8f\n",
-                    stats_summary$TE_norm_differences$mean,
-                    stats_summary$TE_norm_differences$sd,
-                    stats_summary$TE_norm_differences$rmse,
-                    stats_summary$TE_norm_differences$mae), file = stats_filename, append = TRUE)
-        cat(sprintf("  Min: %12.8f | Max: %12.8f\n",
-                    stats_summary$TE_norm_differences$min,
-                    stats_summary$TE_norm_differences$max), file = stats_filename, append = TRUE)
-        
-        # Add warning if many invalid values
-        if (stats_summary$TE_norm_differences$n_valid < 0.9 * stats_summary$TE_norm_differences$n_total) {
-          cat("  WARNING: Significant number of NaN/Inf values detected!\n", file = stats_filename, append = TRUE)
-        }
-        cat("\n", file = stats_filename, append = TRUE)
-      } else {
-        cat("TIME EFFECTS: Not estimated\n\n", file = stats_filename, append = TRUE)
-      }
-      
-      cat(sprintf("Generated at: %s\n", Sys.time()), file = stats_filename, append = TRUE)
+      # # Save summary statistics to file in a more readable format
+      # stats_filename <- file.path(output_dir, paste0("Summary_Stats_", gsub("\\.svg$", ".txt", filename)))
+      # 
+      # # Create a nicely formatted text output
+      # cat("=== VECTOR FIELD ESTIMATION COMPARISON STATISTICS ===\n\n", file = stats_filename)
+      # cat("Parameters:\n", file = stats_filename, append = TRUE)
+      # cat(sprintf("  Kernel: %s\n", kernel), file = stats_filename, append = TRUE)
+      # cat(sprintf("  Ridge parameter: %g\n", ridge), file = stats_filename, append = TRUE)
+      # cat(sprintf("  Condition threshold: %g\n", rcond_thresh), file = stats_filename, append = TRUE)
+      # cat(sprintf("  Number of observations: %d\n", nObs), file = stats_filename, append = TRUE)
+      # cat(sprintf("  Number of time periods: %d\n", nT), file = stats_filename, append = TRUE)
+      # cat(sprintf("  Number of evaluation points: %d\n", nEval), file = stats_filename, append = TRUE)
+      # cat("\n", file = stats_filename, append = TRUE)
+      # 
+      # # Vector Field Statistics
+      # cat("VECTOR FIELD NORM DIFFERENCES ||Estimated - True||:\n", file = stats_filename, append = TRUE)
+      # cat(sprintf("  Valid observations: %d / %d (%.1f%%)\n",
+      #             stats_summary$VF_norm_differences$n_valid,
+      #             stats_summary$VF_norm_differences$n_total,
+      #             100 * stats_summary$VF_norm_differences$n_valid / stats_summary$VF_norm_differences$n_total), 
+      #     file = stats_filename, append = TRUE)
+      # cat(sprintf("  Mean: %12.8f | SD: %12.8f | RMSE: %12.8f | MAE: %12.8f\n",
+      #             stats_summary$VF_norm_differences$mean,
+      #             stats_summary$VF_norm_differences$sd,
+      #             stats_summary$VF_norm_differences$rmse,
+      #             stats_summary$VF_norm_differences$mae), file = stats_filename, append = TRUE)
+      # cat(sprintf("  Min: %12.8f | Max: %12.8f\n",
+      #             stats_summary$VF_norm_differences$min,
+      #             stats_summary$VF_norm_differences$max), file = stats_filename, append = TRUE)
+      # 
+      # # Add warning if many invalid values
+      # if (stats_summary$VF_norm_differences$n_valid < 0.9 * stats_summary$VF_norm_differences$n_total) {
+      #   cat("  WARNING: Significant number of NaN/Inf values detected!\n", file = stats_filename, append = TRUE)
+      # }
+      # cat("\n", file = stats_filename, append = TRUE)
+      # 
+      # # Fixed Effects Statistics (if available)
+      # if (!is.null(stats_summary$FE_norm_differences)) {
+      #   cat("FIXED EFFECTS NORM DIFFERENCES ||Estimated - True||:\n", file = stats_filename, append = TRUE)
+      #   cat(sprintf("  Valid observations: %d / %d (%.1f%%)\n",
+      #               stats_summary$FE_norm_differences$n_valid,
+      #               stats_summary$FE_norm_differences$n_total,
+      #               100 * stats_summary$FE_norm_differences$n_valid / stats_summary$FE_norm_differences$n_total), 
+      #       file = stats_filename, append = TRUE)
+      #   cat(sprintf("  Mean: %12.8f | SD: %12.8f | RMSE: %12.8f | MAE: %12.8f\n",
+      #               stats_summary$FE_norm_differences$mean,
+      #               stats_summary$FE_norm_differences$sd,
+      #               stats_summary$FE_norm_differences$rmse,
+      #               stats_summary$FE_norm_differences$mae), file = stats_filename, append = TRUE)
+      #   cat(sprintf("  Min: %12.8f | Max: %12.8f\n",
+      #               stats_summary$FE_norm_differences$min,
+      #               stats_summary$FE_norm_differences$max), file = stats_filename, append = TRUE)
+      #   
+      #   # Add warning if many invalid values
+      #   if (stats_summary$FE_norm_differences$n_valid < 0.9 * stats_summary$FE_norm_differences$n_total) {
+      #     cat("  WARNING: Significant number of NaN/Inf values detected!\n", file = stats_filename, append = TRUE)
+      #   }
+      #   cat("\n", file = stats_filename, append = TRUE)
+      # } else {
+      #   cat("FIXED EFFECTS: Not estimated\n\n", file = stats_filename, append = TRUE)
+      # }
+      # 
+      # # Time Effects Statistics (if available)
+      # if (!is.null(stats_summary$TE_norm_differences)) {
+      #   cat("TIME EFFECTS NORM DIFFERENCES ||Estimated - True||:\n", file = stats_filename, append = TRUE)
+      #   cat(sprintf("  Valid observations: %d / %d (%.1f%%)\n",
+      #               stats_summary$TE_norm_differences$n_valid,
+      #               stats_summary$TE_norm_differences$n_total,
+      #               100 * stats_summary$TE_norm_differences$n_valid / stats_summary$TE_norm_differences$n_total), 
+      #       file = stats_filename, append = TRUE)
+      #   cat(sprintf("  Mean: %12.8f | SD: %12.8f | RMSE: %12.8f | MAE: %12.8f\n",
+      #               stats_summary$TE_norm_differences$mean,
+      #               stats_summary$TE_norm_differences$sd,
+      #               stats_summary$TE_norm_differences$rmse,
+      #               stats_summary$TE_norm_differences$mae), file = stats_filename, append = TRUE)
+      #   cat(sprintf("  Min: %12.8f | Max: %12.8f\n",
+      #               stats_summary$TE_norm_differences$min,
+      #               stats_summary$TE_norm_differences$max), file = stats_filename, append = TRUE)
+      #   
+      #   # Add warning if many invalid values
+      #   if (stats_summary$TE_norm_differences$n_valid < 0.9 * stats_summary$TE_norm_differences$n_total) {
+      #     cat("  WARNING: Significant number of NaN/Inf values detected!\n", file = stats_filename, append = TRUE)
+      #   }
+      #   cat("\n", file = stats_filename, append = TRUE)
+      # } else {
+      #   cat("TIME EFFECTS: Not estimated\n\n", file = stats_filename, append = TRUE)
+      # }
+      # 
+      # cat(sprintf("Generated at: %s\n", Sys.time()), file = stats_filename, append = TRUE)
       
       cat(sprintf("  - Norm heatmap saved to: VF_NormDiff_%s\n", filename))
-      cat(sprintf("  - Statistics saved to: %s\n", basename(stats_filename)))
+      # cat(sprintf("  - Statistics saved to: %s\n", basename(stats_filename)))
       
       # Console warnings for NaN/Inf values
       if (stats_summary$VF_norm_differences$n_valid < 0.9 * stats_summary$VF_norm_differences$n_total) {

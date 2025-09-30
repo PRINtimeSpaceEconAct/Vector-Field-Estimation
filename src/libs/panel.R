@@ -76,9 +76,9 @@ compute_weights <- function(X, x=NULL, nEval=2500, kernel.type="gauss", D=NULL,
         denom_c <- apply(K, 3, sum, na.rm = TRUE)
         
         # To prevent division by zero
-        denom_a[denom_a == 0] <- 1
-        denom_b[denom_b == 0] <- 1
-        denom_c[denom_c == 0] <- 1
+        denom_a[denom_a == 0] <- 1e-6
+        denom_b[denom_b == 0] <- 1e-6
+        denom_c[denom_c == 0] <- 1e-6
 
         # Compute weights for the chunk
         omega_a[,,chunk] <- sweep(K, c(1, 3), denom_a, "/")
@@ -111,6 +111,44 @@ apply_transformation <- function(data, nT_data, omega_a, omega_b, omega_c, FE, T
     data_dims <- dim(data)
     nObs_data <- data_dims[1]
     
+    if (DEBUG) {
+        print("[DEBUG] apply_transformation inputs:")
+        print(list(
+            data_dims = data_dims,
+            nT_data = nT_data,
+            nEval_chunk = nEval_chunk,
+            FE = FE,
+            TE = TE,
+            omega_a_dims = if (!missing(omega_a)) dim(omega_a) else NULL,
+            omega_b_dims = if (!missing(omega_b)) dim(omega_b) else NULL,
+            omega_c_dims = if (!missing(omega_c)) dim(omega_c) else NULL
+        ))
+    }
+
+    # Dimension sanity checks to avoid silent recycling/non-conformable errors
+    expect_dims <- c(nObs_data, nT_data, nEval_chunk)
+    if (FE) {
+        dims_a <- dim(omega_a)
+        if (length(dims_a) != 3 || any(dims_a != expect_dims)) {
+            stop(sprintf("omega_a dims mismatch. Got (%s), expected (%s).",
+                        paste(dims_a, collapse=","), paste(expect_dims, collapse=",")))
+        }
+    }
+    if (TE) {
+        dims_b <- dim(omega_b)
+        if (length(dims_b) != 3 || any(dims_b != expect_dims)) {
+            stop(sprintf("omega_b dims mismatch. Got (%s), expected (%s).",
+                        paste(dims_b, collapse=","), paste(expect_dims, collapse=",")))
+        }
+    }
+    if (FE && TE) {
+        dims_c <- dim(omega_c)
+        if (length(dims_c) != 3 || any(dims_c != expect_dims)) {
+            stop(sprintf("omega_c dims mismatch. Got (%s), expected (%s).",
+                        paste(dims_c, collapse=","), paste(expect_dims, collapse=",")))
+        }
+    }
+
     data_ext <- array(data, dim = c(data_dims, nEval_chunk))
 
     if (!FE && !TE) {
@@ -123,6 +161,13 @@ apply_transformation <- function(data, nT_data, omega_a, omega_b, omega_c, FE, T
         omega_a_perm <- aperm(omega_a, c(1, 3, 2)) # i, e, s
         data_slice_perm <- aperm(data, c(1, 3, 2))   # i, s, d
         term_a_sum <- array(0, dim = c(nObs_data, 2, nEval_chunk))
+        if (DEBUG) {
+            print("[DEBUG] FE branch dims:")
+            print(list(
+                omega_a_perm = dim(omega_a_perm),
+                data_slice_perm = dim(data_slice_perm)
+            ))
+        }
         for (i in 1:nObs_data) {
             for (e in 1:nEval_chunk) {
                 term_a_sum[i,,e] <- omega_a_perm[i, e, ] %*% data_slice_perm[i, , ]
@@ -136,6 +181,13 @@ apply_transformation <- function(data, nT_data, omega_a, omega_b, omega_c, FE, T
         omega_b_perm <- aperm(omega_b, c(1, 3, 2)) # j, e, s
         data_slice_perm <- aperm(data, c(1, 3, 2)) # j, s, d
         term_b_sum <- array(0, dim = c(nEval_chunk, nT_data, 2))
+        if (DEBUG) {
+            print("[DEBUG] TE branch dims:")
+            print(list(
+                omega_b_perm = dim(omega_b_perm),
+                data_slice_perm = dim(data_slice_perm)
+            ))
+        }
         for(e in 1:nEval_chunk){
             for(s in 1:nT_data){
                 term_b_sum[e,s,] <- colSums(omega_b_perm[,e,s] * data_slice_perm[,s,])
@@ -218,11 +270,11 @@ within_transform <- function(X,
 
     # Compute weights for X
     if (uniform_weights) {
-        omega_a_X <- array(1/nT, dim = c(nObs, nT, nEval_chunk))
-        omega_b_X <- array(1/nObs, dim = c(nObs, nT, nEval_chunk))
-        omega_c_X <- array(1/(nObs * nT), dim = c(nObs, nT, nEval_chunk))
+        omega_a <- array(1/(nT-1), dim = c(nObs, nT-1, nEval_chunk))
+        omega_b <- array(1/nObs, dim = c(nObs, nT-1, nEval_chunk))
+        omega_c <- array(1/(nObs * (nT-1)), dim = c(nObs, nT-1, nEval_chunk))
     } else {
-        weights_X <- compute_weights(X = X,
+        weights_X <- compute_weights(X = X[,,1:(nT-1), drop = FALSE],
                                      x = x,
                                      nEval = nEval_chunk,
                                      kernel.type = kernel.type,
@@ -232,40 +284,38 @@ within_transform <- function(X,
                                      lambda = lambda,
                                      gc = gc,
                                      chunk_size = chunk_size)
-        omega_a_X <- weights_X$omega_a
-        omega_b_X <- weights_X$omega_b
-        omega_c_X <- weights_X$omega_c
+        omega_a <- weights_X$omega_a
+        omega_b <- weights_X$omega_b
+        omega_c <- weights_X$omega_c
     }
 
-    # Transform X and compute X0_star
-    X_transformed <- apply_transformation(X, nT, omega_a_X, omega_b_X, omega_c_X, FE, TE, nEval_chunk)
-    X0_star <- X_transformed[,, 1:(nT - 1), ]
+    print("Summary of omega_a_X:")
+    print(summary(as.vector(omega_a)))
+    print("Summary of omega_b_X:")
+    print(summary(as.vector(omega_b)))
+    print("Summary of omega_c_X:")
+    print(summary(as.vector(omega_c)))
 
-    # Compute weights for Y
-    nT_Y <- nT - 1
-    if (uniform_weights) {
-        omega_a_Y <- array(1/nT_Y, dim = c(nObs, nT_Y, nEval_chunk))
-        omega_b_Y <- array(1/nObs, dim = c(nObs, nT_Y, nEval_chunk))
-        omega_c_Y <- array(1/(nObs * nT_Y), dim = c(nObs, nT_Y, nEval_chunk))
-    } else {
-        # For Y, we reset data-dependent parameters
-        weights_Y <- compute_weights(X = Y,
-                                     x = NULL,
-                                     nEval = nEval_chunk,
-                                     kernel.type = kernel.type,
-                                     D = NULL,
-                                     method.h = method.h,
-                                     h = NULL,
-                                     lambda = NULL,
-                                     gc = gc,
-                                     chunk_size = chunk_size)
-        omega_a_Y <- weights_Y$omega_a
-        omega_b_Y <- weights_Y$omega_b
-        omega_c_Y <- weights_Y$omega_c
+    # Debug dimensions before transformation
+    if (DEBUG) {
+        print("[DEBUG] within_transform: dims before transforming X and Y")
+        print(list(
+            X_slice_dims = dim(X[,,1:(nT-1), drop = FALSE]),
+            Y_dims = dim(Y),
+            omega_a_dims = dim(omega_a),
+            omega_b_dims = dim(omega_b),
+            omega_c_dims = dim(omega_c),
+            nT = nT,
+            nT_minus_1 = nT-1,
+            nEval_chunk = nEval_chunk
+        ))
     }
-    
-    # Transform Y
-    Y_star <- apply_transformation(Y, nT_Y, omega_a_Y, omega_b_Y, omega_c_Y, FE, TE, nEval_chunk)
+
+    # Transform X0 using weights defined on T-1 periods
+    X0_star <- apply_transformation(X[,,1:(nT-1), drop = FALSE], nT - 1, omega_a, omega_b, omega_c, FE, TE, nEval_chunk)
+
+    # Transform Y using the same T-1 weights
+    Y_star <- apply_transformation(Y, nT - 1, omega_a, omega_b, omega_c, FE, TE, nEval_chunk)
 
     # Unroll X0_raw
     X0_raw <- X[,,1:(nT-1), drop=FALSE]
@@ -289,6 +339,122 @@ within_transform <- function(X,
     Y2_unrolled = Y_unrolled[,2]
     
     return(listN(X0_star_unrolled, Y1_star_unrolled, Y2_star_unrolled, X0_raw_unrolled,Y1_unrolled,Y2_unrolled))
+}
+
+#' Applies within-group transformations to panel data with exogenous Y.
+#'
+#' This function is analogous to `within_transform`, but it accepts an exogenous
+#' outcome array `Y` aligned with `X` in time (same `nObs` and `nT`). It computes
+#' weights based on `X` and applies the FE/TE transformations to both `X` and `Y`.
+#'
+#' @param X A 3D array of size nObs x 2 x nT representing the regressor panel data.
+#' @param Y A 3D array of size nObs x 2 x nT representing the exogenous outcome panel data.
+#' @param FE Logical, include fixed effects.
+#' @param TE Logical, include time effects.
+#' @param uniform_weights Logical, if TRUE uses uniform weights; otherwise kernel-based.
+#' @param nEval_chunk Number of evaluation points for the weights.
+#' @param x Optional evaluation points (nEval_chunk x 2) for kernel weights when non-uniform.
+#' @param kernel.type Kernel type for weight computation.
+#' @param D Optional precomputed distance components (used if non-uniform weights).
+#' @param method.h Bandwidth selection method.
+#' @param h Bandwidth value.
+#' @param lambda Optional observation-specific scaling for adaptive bandwidths.
+#' @param gc Logical, request garbage collection in inner loops.
+#' @param chunk_size Chunk size for weight computation.
+#'
+#' @return A list with the same structure as `within_transform`:
+#'         `X0_star_unrolled`, `Y1_star_unrolled`, `Y2_star_unrolled`,
+#'         `X0_raw_unrolled`, `Y1_unrolled`, `Y2_unrolled`.
+#' @export
+within_transform_exogenous <- function(X,
+                                      Y,
+                                      FE = FALSE,
+                                      TE = FALSE,
+                                      uniform_weights = TRUE,
+                                      nEval_chunk = 1000,
+                                      x = NULL,
+                                      kernel.type = "gauss",
+                                      D = NULL,
+                                      method.h = NULL,
+                                      h = NULL,
+                                      lambda = NULL,
+                                      gc = FALSE,
+                                      chunk_size = NULL) {
+
+    dimsX <- dim(X)
+    dimsY <- dim(Y)
+    if (length(dimsX) != 3 || dimsX[2] != 2) {
+        stop("Input X must be a 3D array with second dimension of size 2.")
+    }
+    if (length(dimsY) != 3 || dimsY[2] != 2) {
+        stop("Input Y must be a 3D array with second dimension of size 2.")
+    }
+    if (dimsY[1] != dimsX[1] || dimsY[3] != dimsX[3]) {
+        stop("X and Y must have matching nObs and nT dimensions.")
+    }
+
+    nObs <- dimsX[1]
+    nT <- dimsX[3]
+
+    # Compute weights for X
+    if (uniform_weights) {
+        omega_a_X <- array(1/nT, dim = c(nObs, nT, nEval_chunk))
+        omega_b_X <- array(1/nObs, dim = c(nObs, nT, nEval_chunk))
+        omega_c_X <- array(1/(nObs * nT), dim = c(nObs, nT, nEval_chunk))
+    } else {
+        weights_X <- compute_weights(X = X,
+                                     x = x,
+                                     nEval = nEval_chunk,
+                                     kernel.type = kernel.type,
+                                     D = D,
+                                     method.h = method.h,
+                                     h = h,
+                                     lambda = lambda,
+                                     gc = gc,
+                                     chunk_size = chunk_size)
+        omega_a_X <- weights_X$omega_a
+        omega_b_X <- weights_X$omega_b
+        omega_c_X <- weights_X$omega_c
+    }
+
+    print("Summary of omega_a_X:")
+    print(summary(as.vector(omega_a_X)))
+    print("Summary of omega_b_X:")
+    print(summary(as.vector(omega_b_X)))
+    print("Summary of omega_c_X:")
+    print(summary(as.vector(omega_c_X)))
+
+    # Transform X
+    X_transformed <- apply_transformation(X, nT, omega_a_X, omega_b_X, omega_c_X, FE, TE, nEval_chunk)
+
+    # Transform Y using the same weights computed from X
+    Y_transformed <- apply_transformation(Y, nT, omega_a_X, omega_b_X, omega_c_X, FE, TE, nEval_chunk)
+
+    # Unroll X (raw)
+    X0_raw <- X
+    X0_raw_unrolled <- aperm(X0_raw, c(3, 1, 2))
+    dim(X0_raw_unrolled) <- c(nT * nObs, 2)
+
+    # Unroll X (transformed)
+    X0_star <- X_transformed
+    X0_star_unrolled <- aperm(X0_star, c(3, 1, 2, 4))
+    dim(X0_star_unrolled) <- c(nT * nObs, 2, nEval_chunk)
+
+    # Unroll Y (transformed)
+    Y_star <- Y_transformed
+    Y1_star_unrolled <- aperm(Y_star[,1,,], c(2, 1, 3))
+    dim(Y1_star_unrolled) <- c(nT * nObs, nEval_chunk)
+    Y2_star_unrolled <- aperm(Y_star[,2,,], c(2, 1, 3))
+    dim(Y2_star_unrolled) <- c(nT * nObs, nEval_chunk)
+
+    # Unroll Y (raw)
+    Y_raw <- Y
+    Y_raw_unrolled <- aperm(Y_raw, c(3, 1, 2))
+    dim(Y_raw_unrolled) <- c(nT * nObs, 2)
+    Y1_unrolled <- Y_raw_unrolled[, 1]
+    Y2_unrolled <- Y_raw_unrolled[, 2]
+
+    return(listN(X0_star_unrolled, Y1_star_unrolled, Y2_star_unrolled, X0_raw_unrolled, Y1_unrolled, Y2_unrolled))
 }
 
 #' Computes the derivative term using a local linear estimator.
@@ -419,7 +585,9 @@ compute_derivative_term <- function(X, X_star, x=NULL, nEval=2500, kernel.type="
         solutions <- matrix(unlist(purrr::map(1:current_chunk_size, ~ solve_system(.x))),
                             nrow=2,byrow = FALSE)
 
-        estimator[chunk, ] <- t(solutions)
+        # Transform derivatives from whitened Z-space back to original X-space:
+        # If Z = X %*% sqrtinvS, then gradients in X satisfy beta_X = beta_Z %*% t(sqrtinvS)
+        estimator[chunk, ] <- t(solutions) %*% t(sqrtinvS)
 
         if (gc == TRUE){ gc() }
     }
@@ -471,9 +639,8 @@ compute_m <- function(X_obs_unrolled, x_eval, beta, m_0, x0, beta_0) {
     # z1[it, e] = x[e,1] - X_unrolled[it, 1]
     D_components <- computeDcomponents(X_obs_unrolled, x_eval)
     
-    # We need (X - x), so we negate the results
-    Diff1 <- -D_components$z1
-    Diff2 <- -D_components$z2
+    Diff1 <- D_components$z1
+    Diff2 <- D_components$z2
     
     # S2 will be a vector of size nEval
     # For each evaluation point e, we compute S2[e] = sum_{i,t} (beta_e^T * (X_{i,t} - x_e))
@@ -539,8 +706,8 @@ compute_m0 <- function(X_obs_unrolled, Y_obs_unrolled, beta, x0, beta_0) {
     # S2 = (1/NT) * sum_{j,s} beta(X_{j,s})^T sum_{i,t} (X_{i,t} - X_{j,s})
     D_components <- computeDcomponents(X_obs_unrolled, X_obs_unrolled)
     
-    Diff1 <- -D_components$z1
-    Diff2 <- -D_components$z2
+    Diff1 <- D_components$z1
+    Diff2 <- D_components$z2
     
     term2_1 <- sweep(Diff1, 2, beta[, 1], "*")
     term2_2 <- sweep(Diff2, 2, beta[, 2], "*")
@@ -666,6 +833,305 @@ estimate_panel_vf <- function(X,
                  iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
 }
 
+#' Estimates a vector field from panel data when Y is exogenous.
+#'
+#' This mirrors `estimate_panel_vf`, but accepts an exogenous outcome `Y` that is
+#' aligned with `X` in time: Y_{i,t} = F(X_{i,t}) + FE + TE + noise.
+#' FE/TE partialling is performed using weights computed from `X`.
+#'
+#' @param X A 3D array (nObs x 2 x nT) of regressors.
+#' @param Y A 3D array (nObs x 2 x nT) of exogenous outcomes.
+#' @param x Evaluation points (nEval x 2).
+#' @param nEval Number of evaluation points.
+#' @param FE,TE,uniform_weights,kernel.type,method.h,h,chunk_size,gc,ridge_param,rcond_threshold See `estimate_panel_vf`.
+#' @return A list analogous to `estimate_panel_vf` outputs.
+#' @export
+estimate_panel_vf_exogenous <- function(X,
+                                        Y,
+                                        x,
+                                        nEval,
+                                        FE = TRUE,
+                                        TE = TRUE,
+                                        uniform_weights = TRUE,
+                                        kernel.type = "gauss",
+                                        method.h = "silverman",
+                                        h = NULL,
+                                        chunk_size = 512,
+                                        gc = FALSE,
+                                        ridge_param = 1e-5,
+                                        rcond_threshold = 1e-3) {
+
+    # 1. Within transformation using exogenous Y
+    Filtered <- within_transform_exogenous(X, Y,
+                                           FE = FE, TE = TE,
+                                           uniform_weights = uniform_weights, nEval_chunk = nEval,
+                                           x = x, kernel.type = kernel.type,
+                                           method.h = method.h, h = h, chunk_size = chunk_size,
+                                           gc = gc)
+
+    X0_raw <- Filtered$X0_raw_unrolled
+    X0_star <- Filtered$X0_star_unrolled
+    Y1_star <- Filtered$Y1_star_unrolled
+    Y2_star <- Filtered$Y2_star_unrolled
+    Y1 <- Filtered$Y1_unrolled
+    Y2 <- Filtered$Y2_unrolled
+
+    # 2. Estimate derivatives at evaluation points
+    derivative_estimator_1 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
+                                                      kernel.type=kernel.type, D=NULL,
+                                                      method.h=method.h, h=h, lambda=NULL,
+                                                      gc=gc, chunk_size=chunk_size, Y=Y1_star,
+                                                      ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    derivative_estimator_2 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
+                                                      kernel.type=kernel.type, D=NULL,
+                                                      method.h=method.h, h=h, lambda=NULL,
+                                                      gc=gc, chunk_size=chunk_size, Y=Y2_star,
+                                                      ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    # 3. Estimate derivatives at observed points
+    X_star_obs <- X0_star[,, rep(1, nrow(X0_raw))]
+    Y1_star_obs <- Y1_star[, rep(1, nrow(Y1_star))]
+    Y2_star_obs <- Y2_star[, rep(1, nrow(Y2_star))]
+
+    derivative_obs_1 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
+                                                kernel.type=kernel.type, D=NULL,
+                                                method.h=method.h, h=h, lambda=NULL,
+                                                gc=gc, chunk_size=chunk_size, Y=Y1_star_obs,
+                                                ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    derivative_obs_2 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
+                                                kernel.type=kernel.type, D=NULL,
+                                                method.h=method.h, h=h, lambda=NULL,
+                                                gc=gc, chunk_size=chunk_size, Y=Y2_star_obs,
+                                                ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    # 4. Compute m0
+    meanPoint <- colSums(X0_raw) / nrow(X0_raw)
+    iBest <- which.min(rowSums(sweep(x, 2, meanPoint)^2))
+
+    m10 <- compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y1, beta=derivative_obs_1$estimator, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    m20 <- compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y2, beta=derivative_obs_2$estimator, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+
+    # 5. Compute vector field
+    VF_hat1 <- compute_m(X_obs_unrolled = X0_raw, x_eval = x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    VF_hat2 <- compute_m(X_obs_unrolled = X0_raw, x_eval = x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+
+    estimator <- cbind(VF_hat1, VF_hat2)
+    h <- derivative_estimator_1$h
+
+    return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, h, chunk_size, gc,
+                 ridge_param, rcond_threshold,
+                 derivative_estimator_1, derivative_estimator_2, derivative_obs_1, derivative_obs_2,
+                 iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
+}
+
+#' Estimates a vector field from panel data with fixed and time effects using adaptive bandwidth.
+#'
+#' This function implements an adaptive version of the panel vector field estimation procedure,
+#' where local bandwidths are computed based on the density of the data points. This can improve
+#' estimation in regions with varying data density.
+#'
+#' @param X A 3D array of size nObs x 2 x nT representing the panel data.
+#' @param x A matrix of evaluation points of size nEval x 2.
+#' @param nEval The number of evaluation points for the weights.
+#' @param FE A logical value indicating whether to include fixed effects.
+#' @param TE A logical value indicating whether to include time effects.
+#' @param uniform_weights A logical value for using uniform weights in transformation.
+#' @param kernel.type The kernel function to be used.
+#' @param method.h The method for bandwidth selection.
+#' @param chunk_size The size of chunks for processing.
+#' @param gc Logical, for garbage collection.
+#' @param alpha Sensitivity parameter for adaptive bandwidth (default: 0.5).
+#' @return A list containing the estimated vector field `VF_hat`, the evaluation points `x`, and other intermediate results.
+#' @export
+estimate_panel_vf_adaptive <- function(X,
+                                      x,
+                                      nEval,
+                                      FE = TRUE,
+                                      TE = TRUE,
+                                      uniform_weights = TRUE,
+                                      kernel.type = "gauss",
+                                      method.h = "silverman",
+                                      h = NULL,
+                                      chunk_size = 512,
+                                      gc = FALSE,
+                                      alpha = 0.5,
+                                      ridge_param = 1e-5,
+                                      rcond_threshold = 1e-3) {
+
+    # 1. Within transformation
+    Filtered <- within_transform(X,
+                                 FE = FE, TE = TE,
+                                 uniform_weights = uniform_weights, nEval_chunk = nEval,
+                                 x = x, kernel.type = kernel.type,
+                                 method.h = method.h, h = h, chunk_size = chunk_size,
+                                 gc = gc)
+
+    X0_raw <- Filtered$X0_raw_unrolled
+    X0_star <- Filtered$X0_star_unrolled
+    Y1_star <- Filtered$Y1_star_unrolled
+    Y2_star <- Filtered$Y2_star_unrolled
+    Y1 <- Filtered$Y1_unrolled
+    Y2 <- Filtered$Y2_unrolled
+    
+    nObs = dim(X)[1]
+    nT = dim(X)[3]
+
+    # 2. Compute adaptive lambda based on X0_raw
+    lambda <- getLocalBandwidth(X0_raw, kernel.type = kernel.type, D = NULL,
+                               method.h = method.h, h = h,
+                               gc = gc, chunk_size = chunk_size, alpha = alpha)
+
+    # 3. Estimate derivatives at evaluation points
+    derivative_estimator_1 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
+                                                      kernel.type=kernel.type, D=NULL,
+                                                      method.h=method.h, h=h, lambda=lambda,
+                                                      gc=gc, chunk_size=chunk_size, Y=Y1_star,
+                                                      ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    derivative_estimator_2 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
+                                                      kernel.type=kernel.type, D=NULL,
+                                                      method.h=method.h, h=h, lambda=lambda,
+                                                      gc=gc, chunk_size=chunk_size, Y=Y2_star,
+                                                      ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    # 4. Estimate derivatives at observed points
+  
+    X_star_obs <- X0_star[,, rep(1, nrow(X0_raw))]
+    Y1_star_obs <- Y1_star[, rep(1, nrow(Y1_star))]
+    Y2_star_obs <- Y2_star[, rep(1, nrow(Y2_star))]
+    
+    derivative_obs_1 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
+                                                kernel.type=kernel.type, D=NULL,
+                                                method.h=method.h, h=h, lambda=lambda,
+                                                gc=gc, chunk_size=chunk_size, Y=Y1_star_obs,
+                                                ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    derivative_obs_2 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
+                                                kernel.type=kernel.type, D=NULL,
+                                                method.h=method.h, h=h, lambda=lambda,
+                                                gc=gc, chunk_size=chunk_size, Y=Y2_star_obs,
+                                                ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    # 5. Compute m0
+    meanPoint <- colSums(X0_raw) / nrow(X0_raw)
+    iBest <- which.min(rowSums(sweep(x, 2, meanPoint)^2))
+
+    m10 <- compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y1, beta=derivative_obs_1$estimator, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    m20 <- compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y2, beta=derivative_obs_2$estimator, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+    
+    # 6. Compute vector field
+    VF_hat1 <- compute_m(X_obs_unrolled = X0_raw, x_eval = x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    VF_hat2 <- compute_m(X_obs_unrolled = X0_raw, x_eval = x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+
+    estimator <- cbind(VF_hat1, VF_hat2)
+    h <- derivative_estimator_1$h
+
+    return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, h, chunk_size, gc,
+                 ridge_param, rcond_threshold, alpha, lambda,
+                 derivative_estimator_1, derivative_estimator_2, derivative_obs_1, derivative_obs_2, 
+                 iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
+}
+
+#' Adaptive estimator with exogenous Y.
+#'
+#' Same as `estimate_panel_vf_adaptive`, but accepts `Y` exogenously supplied,
+#' and applies FE/TE transformations using weights computed from `X`.
+#'
+#' @param X A 3D array (nObs x 2 x nT) of regressors.
+#' @param Y A 3D array (nObs x 2 x nT) of outcomes.
+#' @param x Evaluation points (nEval x 2).
+#' @param nEval Number of evaluation points.
+#' @param FE,TE,uniform_weights,kernel.type,method.h,h,chunk_size,gc,alpha,ridge_param,rcond_threshold See `estimate_panel_vf_adaptive`.
+#' @return A list analogous to `estimate_panel_vf_adaptive` outputs, with `alpha` and `lambda`.
+#' @export
+estimate_panel_vf_adaptive_exogenous <- function(X,
+                                                 Y,
+                                                 x,
+                                                 nEval,
+                                                 FE = TRUE,
+                                                 TE = TRUE,
+                                                 uniform_weights = TRUE,
+                                                 kernel.type = "gauss",
+                                                 method.h = "silverman",
+                                                 h = NULL,
+                                                 chunk_size = 512,
+                                                 gc = FALSE,
+                                                 alpha = 0.5,
+                                                 ridge_param = 1e-5,
+                                                 rcond_threshold = 1e-3) {
+
+    # 1. Within transformation using exogenous Y
+    Filtered <- within_transform_exogenous(X, Y,
+                                           FE = FE, TE = TE,
+                                           uniform_weights = uniform_weights, nEval_chunk = nEval,
+                                           x = x, kernel.type = kernel.type,
+                                           method.h = method.h, h = h, chunk_size = chunk_size,
+                                           gc = gc)
+
+    X0_raw <- Filtered$X0_raw_unrolled
+    X0_star <- Filtered$X0_star_unrolled
+    Y1_star <- Filtered$Y1_star_unrolled
+    Y2_star <- Filtered$Y2_star_unrolled
+    Y1 <- Filtered$Y1_unrolled
+    Y2 <- Filtered$Y2_unrolled
+
+    # 2. Adaptive local bandwidth based on X0_raw
+    lambda <- getLocalBandwidth(X0_raw, kernel.type = kernel.type, D = NULL,
+                                method.h = method.h, h = h,
+                                gc = gc, chunk_size = chunk_size, alpha = alpha)
+
+    # 3. Estimate derivatives at evaluation points
+    derivative_estimator_1 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
+                                                      kernel.type=kernel.type, D=NULL,
+                                                      method.h=method.h, h=h, lambda=lambda,
+                                                      gc=gc, chunk_size=chunk_size, Y=Y1_star,
+                                                      ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    derivative_estimator_2 <- compute_derivative_term(X0_raw, X_star = X0_star, x=x,
+                                                      kernel.type=kernel.type, D=NULL,
+                                                      method.h=method.h, h=h, lambda=lambda,
+                                                      gc=gc, chunk_size=chunk_size, Y=Y2_star,
+                                                      ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    # 4. Estimate derivatives at observed points
+    X_star_obs <- X0_star[,, rep(1, nrow(X0_raw))]
+    Y1_star_obs <- Y1_star[, rep(1, nrow(Y1_star))]
+    Y2_star_obs <- Y2_star[, rep(1, nrow(Y2_star))]
+
+    derivative_obs_1 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
+                                                kernel.type=kernel.type, D=NULL,
+                                                method.h=method.h, h=h, lambda=lambda,
+                                                gc=gc, chunk_size=chunk_size, Y=Y1_star_obs,
+                                                ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    derivative_obs_2 <- compute_derivative_term(X0_raw, X_star=X_star_obs, x=X0_raw,
+                                                kernel.type=kernel.type, D=NULL,
+                                                method.h=method.h, h=h, lambda=lambda,
+                                                gc=gc, chunk_size=chunk_size, Y=Y2_star_obs,
+                                                ridge_param = ridge_param, rcond_threshold = rcond_threshold)
+
+    # 5. Compute m0
+    meanPoint <- colSums(X0_raw) / nrow(X0_raw)
+    iBest <- which.min(rowSums(sweep(x, 2, meanPoint)^2))
+
+    m10 <- compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y1, beta=derivative_obs_1$estimator, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    m20 <- compute_m0(X_obs_unrolled=X0_raw, Y_obs_unrolled=Y2, beta=derivative_obs_2$estimator, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+
+    # 6. Compute vector field
+    VF_hat1 <- compute_m(X_obs_unrolled = X0_raw, x_eval = x, beta=derivative_estimator_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
+    VF_hat2 <- compute_m(X_obs_unrolled = X0_raw, x_eval = x, beta=derivative_estimator_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
+
+    estimator <- cbind(VF_hat1, VF_hat2)
+    h <- derivative_estimator_1$h
+
+    return(listN(estimator, x, X0_raw, X, nEval, FE, TE, uniform_weights, kernel.type, method.h, h, chunk_size, gc,
+                 ridge_param, rcond_threshold, alpha, lambda,
+                 derivative_estimator_1, derivative_estimator_2, derivative_obs_1, derivative_obs_2,
+                 iBest, m10, m20, VF_hat1, VF_hat2, Y1, Y2))
+}
+
 #' Reconstructs fixed and time effects from an estimated panel vector field model.
 #'
 #' After estimating the vector field, this function computes the individual fixed effects (alpha_i)
@@ -678,12 +1144,12 @@ estimate_panel_vf <- function(X,
 #' @param TE A logical value. If TRUE, computes time effects.
 #' @return A list containing the estimated fixed effects `alpha_i` (a matrix of size nObs x 2)
 #'         and time effects `gamma_t` (a matrix of size (nT-1) x 2).
+#' @export
 get_effects <- function(panel_estimator, X_obs, FE=TRUE, TE=TRUE) {
     x <- panel_estimator$x
     X <- panel_estimator$X
     nObs <- dim(X)[1]
-    nT <- dim(X)[3]
-
+    
     X_obs_estimator <- panel_estimator$X0_raw
     derivative_obs_1 <- panel_estimator$derivative_obs_1
     derivative_obs_2 <- panel_estimator$derivative_obs_2
@@ -695,18 +1161,23 @@ get_effects <- function(panel_estimator, X_obs, FE=TRUE, TE=TRUE) {
     Y1 <- panel_estimator$Y1
     Y2 <- panel_estimator$Y2
 
+    nT_Y <- length(Y1) / nObs
+    if (nT_Y != round(nT_Y)) {
+        stop(paste("Inconsistent dimensions in get_effects: length(Y1) =", length(Y1), "nObs =", nObs))
+    }
+
     # reconstruct FE
     VF_hat1 = compute_m(X_obs_unrolled = X_obs_estimator, x_eval = X_obs, beta=derivative_obs_1$estimator, m_0=m10, x0=x[iBest,], beta_0=derivative_estimator_1$estimator[iBest,])
     VF_hat2 = compute_m(X_obs_unrolled = X_obs_estimator, x_eval = X_obs, beta=derivative_obs_2$estimator, m_0=m20, x0=x[iBest,], beta_0=derivative_estimator_2$estimator[iBest,])
 
-    YObs = aperm(array(cbind(Y1,Y2),dim = c(nT-1,nObs,2)),c(2,3,1))
-    VFObs = aperm(array(cbind(VF_hat1,VF_hat2),dim = c(nT-1,nObs,2)),c(2,3,1))
+    YObs = aperm(array(cbind(Y1,Y2),dim = c(nT_Y,nObs,2)),c(2,3,1))
+    VFObs = aperm(array(cbind(VF_hat1,VF_hat2),dim = c(nT_Y,nObs,2)),c(2,3,1))
 
     alpha_i <- NULL
     gamma_t <- NULL
 
     if (FE) {
-        alpha_i = apply(YObs - VFObs, MARGIN = c(1, 2), FUN = sum)/(nT-1)
+        alpha_i = apply(YObs - VFObs, MARGIN = c(1, 2), FUN = sum)/nT_Y
     }
     if (TE) {
         gamma_t = t(apply(YObs - VFObs, MARGIN = c(2, 3), FUN = sum)/nObs)

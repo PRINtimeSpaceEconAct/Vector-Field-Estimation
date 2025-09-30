@@ -42,11 +42,8 @@ VF <- function(X){
 X1 = X0 + t(apply(X0, 1, VF)) +  matrix(rnorm(2*nObs),nrow=nObs) %*% matrix(c(0.01,0.005,0.005,0.02),nrow=2)
 
 # eval points
-xGrid = seq(from=-1, to=1, length.out=round(sqrt(nEval)))
-yGrid = seq(from=-1, to=1, length.out=round(sqrt(nEval)))
-# xGrid = seq(from=min(c(X0[,1],X1[,1])), to=max(c(X0[,1],X1[,1])), length.out=round(sqrt(nEval)))
-# yGrid = seq(from=min(c(X0[,2],X1[,2])), to=max(c(X0[,2],X1[,2])), length.out=round(sqrt(nEval)))
-x = as.matrix(expand.grid(xGrid, yGrid))
+X_unrolled <- rbind(X0, X1)
+x <- defineEvalPoints(X_unrolled, nEval)
 
 # stima ----
 
@@ -70,15 +67,15 @@ est_field_adaptiveLL = LLfieldAdaptive(X0, X1, x=x, kernel.type="epa",method.h =
 
 # plot ----
 # plot campo vero ----
-# dev.new()
-# op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times"
-# VFx = t(apply(x, 1, VF))
-# lengthArrows=0.1
-# plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
-# arrows(x[,1],x[,2],x[,1]+lengthArrows*VFx[,1],x[,2]+lengthArrows*VFx[,2],angle=15,col="black",length=0.05)
-# abline(h=0)
-# abline(v=0)
-# dev.copy2pdf(file="testPics/doubleWellcampoVero.pdf")
+dev.new()
+op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times"
+VFx = t(apply(x, 1, VF))
+lengthArrows=0.1
+plot(x, type = "n", xlab = TeX(r'($X_1$)'), ylab=TeX(r'($X_2$)'), main = "")
+arrows(x[,1],x[,2],x[,1]+lengthArrows*VFx[,1],x[,2]+lengthArrows*VFx[,2],angle=15,col="black",length=0.05)
+abline(h=0)
+abline(v=0)
+dev.copy2pdf(file="testPics/doubleWellcampoVero.pdf")
 # par(op)
 
 ## plot campo stimato ----
@@ -93,7 +90,7 @@ arrows(est_field_adaptiveLL$x[,1], est_field_adaptiveLL$x[,2],
        length = 0.05, angle = 15, col = "blue")
 abline(h=0)
 abline(v=0)
-# dev.copy2pdf(file="testPics/doubleWellcampoStimato.pdf")
+dev.copy2pdf(file="testPics/doubleWellcampoStimato.pdf")
 par(op)
 
 ## plot campo stimato significativo ----

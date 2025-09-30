@@ -18,9 +18,8 @@ computeDcomponents <- function(X,x){
     MEval2 = matrix(rep(x[,2],nObs),nObs,nEval,byrow=TRUE)
   
 
-    z1 = MEval1 - MObs1
-    z2 = MEval2 - MObs2
-    
+    z1 = MObs1 - MEval1
+    z2 = MObs2 - MEval2
 
     return(listN(z1,z2))
 }
