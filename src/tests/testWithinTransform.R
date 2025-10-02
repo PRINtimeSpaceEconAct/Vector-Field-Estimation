@@ -1,4 +1,26 @@
-# Visualize the effect of within_transform on simple one-step VF dynamics
+# ============================================================================
+# testWithinTransform.R
+# ============================================================================
+# 
+# Purpose:
+#   This script visualizes the effect of the within_transform function on 
+#   simple one-step vector field (VF) dynamics. It demonstrates how fixed 
+#   effects (FE) and time effects (TE) transformations affect both the 
+#   positions of points and the vector field arrows in a panel data context.
+#
+# What it does:
+#   1. Creates an equispaced grid of points in 2D space
+#   2. Applies a vector field (double well potential) to generate panel dynamics
+#   3. Applies within_transform with FE and TE to both positions and displacements
+#   4. Visualizes the original vs transformed grids and arrows
+#   5. Shows side-by-side comparison of point positions and VF step shifts
+#
+# Output:
+#   Results are saved in the 'test_pics_withinTransform/' directory as SVG files:
+#   - WithinTransform_Combined_VF_Arrows_*.svg: Original vs transformed one-step arrows
+#   - WithinTransform_Point_And_VF_Shift_*.svg: Position and VF step transformations
+#
+# ============================================================================
 
 rm(list = ls())
 DEBUG <- FALSE

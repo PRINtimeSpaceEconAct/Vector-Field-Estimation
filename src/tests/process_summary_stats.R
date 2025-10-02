@@ -1,3 +1,43 @@
+# ==============================================================================
+# SUMMARY STATISTICS PROCESSOR FOR PANEL DATA ESTIMATION TESTS
+# ==============================================================================
+#
+# Purpose:
+# This script processes summary statistics files generated from panel data
+# estimation Monte Carlo simulations. It extracts performance metrics from text
+# files and consolidates them into structured CSV files for further analysis.
+#
+# What it does:
+# 1. Scans multiple test directories (e.g., test_pics_DistRot, test_pics_Rotation,
+#    test_pics_DoubleWell) for summary statistics files
+# 
+# 2. Parses each summary text file to extract:
+#    - Kernel type (Epanechnikov or Gaussian)
+#    - Ridge regression parameter
+#    - Condition number threshold
+#    - Performance statistics for three components:
+#      * Vector Field (VF) norm differences: mean, SD, RMSE, min, max
+#      * Fixed Effects (FE) norm differences: mean, SD, RMSE, min, max
+#      * Time Effects (TE) norm differences: mean, SD, RMSE, min, max
+#
+# 3. Organizes the extracted data by:
+#    - Data Generating Process (DGP) type (extracted from directory name)
+#    - Kernel type (Epa vs Gauss)
+#
+# 4. Outputs separate CSV files for each kernel type in each directory:
+#    - Epa_summary.csv: Contains all results using Epanechnikov kernel
+#    - Gauss_summary.csv: Contains all results using Gaussian kernel
+#
+# Input:
+# - Text files matching pattern "Summary_Stats_Synthetic_*.txt" in specified
+#   test directories, containing formatted statistics from simulation runs
+#
+# Output:
+# - CSV files (Epa_summary.csv, Gauss_summary.csv) in each processed directory
+#   with columns for all extracted parameters and statistics
+#
+# ==============================================================================
+
 # Load necessary libraries
 library(stringr)
 library(dplyr)
