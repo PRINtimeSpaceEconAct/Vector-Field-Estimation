@@ -93,6 +93,10 @@ runPanelVFAnalysis <- function(panel_df,
 
     cat("Panel vector field analysis started.\n")
 
+    # Initialize variables for optimization grids (used in summary)
+    h_grid_opt <- NULL
+    alpha_grid_opt <- NULL
+
     # 1) Evaluation grid
     x <- defineEvalPoints(X_unrolled, nEval)
 
@@ -127,6 +131,10 @@ runPanelVFAnalysis <- function(panel_df,
                 # Extract optimal parameters
                 h_opt <- opt_results$h
                 alpha_opt <- opt_results$alpha
+                
+                # Extract grids for later use in summary
+                h_grid_opt <- if(hOpt) opt_results$hGrid else NULL
+                alpha_grid_opt <- if(alphaOpt) opt_results$alphaGrid else NULL
                 
                 cat("Optimal h:", round(h_opt, 4), "\n")
                 cat("Optimal alpha:", round(alpha_opt, 4), "\n")
@@ -215,6 +223,10 @@ runPanelVFAnalysis <- function(panel_df,
             stop("Invalid estimation_method. Choose 'LL' or 'NW'.")
         }
         
+        # Extract optimization grids for summary (if available)
+        h_grid_opt <- if(hOpt && !is.null(vf_results$hGrid)) vf_results$hGrid else NULL
+        alpha_grid_opt <- if(alphaOpt && !is.null(vf_results$alphaGrid)) vf_results$alphaGrid else NULL
+        
         panel_vf_results <- vf_results # To maintain compatibility with bootstrap
         VF_hat <- vf_results$estimator
         X0_raw <- vf_results$X0
@@ -284,9 +296,14 @@ runPanelVFAnalysis <- function(panel_df,
     cat("Kernel Type:", kernel.type, "\n")
     
     if (hOpt) {
-        h_range <- range(panel_vf_results$hGrid, na.rm = TRUE)
-        cat("Bandwidth (h) optimized over [", round(h_range[1], 4), ", ", round(h_range[2], 4), "]\n", sep = "")
-        cat("  - Optimal h found:", round(panel_vf_results$h, 4), "\n")
+        if (!is.null(h_grid_opt)) {
+            h_range <- range(h_grid_opt, na.rm = TRUE)
+            cat("Bandwidth (h) optimized over [", round(h_range[1], 4), ", ", round(h_range[2], 4), "]\n", sep = "")
+            cat("  - Optimal h found:", round(panel_vf_results$h, 4), "\n")
+        } else {
+            cat("Bandwidth (h) optimized\n")
+            cat("  - Optimal h found:", round(panel_vf_results$h, 4), "\n")
+        }
     } else if (is.null(h)) {
         cat("Bandwidth (h) Method:", method.h, "\n")
         cat("  - Estimated h:", round(panel_vf_results$h, 4), "\n")
@@ -296,9 +313,14 @@ runPanelVFAnalysis <- function(panel_df,
 
     if (adaptive) {
         if (alphaOpt) {
-            alpha_range <- range(panel_vf_results$alphaGrid, na.rm = TRUE)
-            cat("Alpha optimized over [", round(alpha_range[1], 4), ", ", round(alpha_range[2], 4), "]\n", sep = "")
-            cat("  - Optimal alpha found:", round(panel_vf_results$alpha, 4), "\n")
+            if (!is.null(alpha_grid_opt)) {
+                alpha_range <- range(alpha_grid_opt, na.rm = TRUE)
+                cat("Alpha optimized over [", round(alpha_range[1], 4), ", ", round(alpha_range[2], 4), "]\n", sep = "")
+                cat("  - Optimal alpha found:", round(panel_vf_results$alpha, 4), "\n")
+            } else {
+                cat("Alpha optimized\n")
+                cat("  - Optimal alpha found:", round(panel_vf_results$alpha, 4), "\n")
+            }
         } else {
             cat("Alpha:", round(panel_vf_results$alpha, 4), "\n")
         }

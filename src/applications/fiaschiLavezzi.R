@@ -13,7 +13,7 @@ library(latex2exp)
 
 load("datasets/datasetGDP.LE.NonOverlapping.RData")
 data = dataset.GDP.LE
-countriesDavide = read.csv(file = "../Vector Field Estimation/datasets/countryCodeAnalysis.csv")
+countriesDavide = read.csv(file = "datasets/countryCodeAnalysis.csv")
 
 # Filter countries in Davide's file
 data = data %>% filter(countryCode %in% countriesDavide[,2])
@@ -100,7 +100,7 @@ arrows(est_field_adaptive$x[,1], est_field_adaptive$x[,2],
 abline(h=0)
 abline(v=0)
 par(op)
-dev.copy2pdf(file="fiaschilavezzi.pdf")
+dev.copy2pdf(file="outpics/fiaschilavezzi.pdf")
 
 ## plot campo stimato significativo ----
 signifInd = which(signifBoot)
@@ -120,6 +120,6 @@ abline(h=mean(data$Delta))
 abline(h=0)
 abline(v=0)
 par(op)
-dev.copy2pdf(file="fiaschilavezziSignif.pdf")
+dev.copy2pdf(file="outpics/fiaschilavezziSignif.pdf")
 # 
 # 

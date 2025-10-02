@@ -41,7 +41,7 @@ if (timeInterval == 10) {
   data = data_10y %>% filter(Year.ini %% 10 == startYearOfDecade)
 }
 
-countriesDavide = read.csv(file = "src/countryCodeAnalysis.csv")
+countriesDavide = read.csv(file = "datasets/countryCodeAnalysis.csv")
 
 # Filter countries in Davide's file
 data = data %>% filter(countryCode %in% countriesDavide[,2])
@@ -160,7 +160,7 @@ lines(estForecastObs$eval.points,estForecastObs$estimate,col="purple",lwd=3)
 
 legend("bottomright",legend=c("1960","2015","Forecast"),
        col=c("blue","red","purple"),lwd=c(3,3,3),bg="white")
-dev.copy2pdf(file="Forecast19602015NonOverlapping.pdf",width=7,height=7,family = "mono")
+dev.copy2pdf(file="outpics/Forecast19602015NonOverlapping.pdf",width=7,height=7,family = "mono")
 par(op)
 
 ## plot forecast ----
@@ -227,7 +227,7 @@ lines(estForecastObs$eval.points,estForecastObs$estimate,col="darkgreen",lwd=3)
 # lines(forecastEst[,1,nPeriods],forecastEst[,2,nPeriods],col="green",lwd=4)
 legend("bottomright",legend=c("2015","2025 (Forecast)","2035 (Forecast)","2045 (Forecast)"),
        col=c("red","lightgreen","forestgreen","darkgreen"),lwd=c(3,3,3,3),bg="white")
-dev.copy2pdf(file="Forecast19602015NonOverlapping102030.pdf",width=7,height=7,family = "mono")
+dev.copy2pdf(file="outpics/Forecast19602015NonOverlapping102030.pdf",width=7,height=7,family = "mono")
 par(op)
 
 
@@ -241,7 +241,7 @@ Fx = signifVFest$signif*est_field$estimator[,1]/5
 image.plot(x = unique(est_field$x[,1]), y = unique(est_field$x[,2]), z = matrix(Fx, nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab="GDP per capita (PPP in million 2017 USD, log scale)",ylab="Life Expectancy",main="",xaxt="n")
 axis(1, at=6:12, labels=as.character(round(exp(6:12),-3)))
 points(data$GDP.t0,data$LE.t0,pch=19,col="black",cex=0.1)
-dev.copy2pdf(file="Fx19602015NonOverlapping.pdf")
+dev.copy2pdf(file="outpics/Fx19602015NonOverlapping.pdf")
 
 dev.new()
 signifVFest$signif[signifVFest$signif==0] = NA
@@ -250,7 +250,7 @@ Fy = signifVFest$signif*est_field$estimator[,2]/5
 image.plot(x = unique(est_field$x[,1]), y = unique(est_field$x[,2]), z = matrix(Fy, nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab="GDP per capita (PPP in million 2017 USD, log scale)",ylab="Life Expectancy",main="",xaxt="n")
 axis(1, at=6:12, labels=as.character(round(exp(6:12),-3)))
 points(data$GDP.t0,data$LE.t0,pch=19,col="black",cex=0.1)
-dev.copy2pdf(file="Fy19602015NonOverlapping.pdf")
+dev.copy2pdf(file="outpics/Fy19602015NonOverlapping.pdf")
 
 dev.new()
 op <- par(family = "mono") #Possible families: "mono", "Helvetica","Palatino" or "Times" 
@@ -259,7 +259,7 @@ FyOverFx = signifVFest$signif*est_field$estimator[,2]/est_field$estimator[,1]
 image.plot(x = unique(est_field$x[,1]), y = unique(est_field$x[,2]), z = matrix(log(FyOverFx), nrow=sqrt(nEval), ncol=sqrt(nEval)),xlab="GDP per capita (PPP in million 2017 USD, log scale)",ylab="Life Expectancy",main="",xaxt="n",nlevels=50)
 axis(1, at=6:12, labels=as.character(round(exp(6:12),-3)))
 points(data$GDP.t0,data$LE.t0,pch=19,col="black",cex=0.1)
-dev.copy2pdf(file="FyoverFx19602015NonOverlapping.pdf")
+dev.copy2pdf(file="outpics/FyoverFx19602015NonOverlapping.pdf")
 
 
 # VAR a mano, ma forse giusto ----
@@ -330,7 +330,7 @@ lines(forecastEst[,1],forecastEst[,2],col="green",lwd=4)
 
 legend("bottomright",legend=c("1960","2015","Forecasted Observed","Forecasted Estimated"),
        col=c("black","red","purple","green"),pch=c(19,19,19,19),lwd=c(4,4,4,4),bg="white")
-dev.copy2pdf(file="LogForecastVAR19602015NonOverlapping.pdf")
+dev.copy2pdf(file="outpics/LogForecastVAR19602015NonOverlapping.pdf")
 
 obs = cbind(dataLatest$GDP.t1,dataLatest$LE.t1)
 diffVF = as.matrix(forecastObsVF-obs)

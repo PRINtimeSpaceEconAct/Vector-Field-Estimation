@@ -289,13 +289,6 @@ within_transform <- function(X,
         omega_c <- weights_X$omega_c
     }
 
-    print("Summary of omega_a_X:")
-    print(summary(as.vector(omega_a)))
-    print("Summary of omega_b_X:")
-    print(summary(as.vector(omega_b)))
-    print("Summary of omega_c_X:")
-    print(summary(as.vector(omega_c)))
-
     # Debug dimensions before transformation
     if (DEBUG) {
         print("[DEBUG] within_transform: dims before transforming X and Y")
@@ -416,13 +409,6 @@ within_transform_exogenous <- function(X,
         omega_b_X <- weights_X$omega_b
         omega_c_X <- weights_X$omega_c
     }
-
-    print("Summary of omega_a_X:")
-    print(summary(as.vector(omega_a_X)))
-    print("Summary of omega_b_X:")
-    print(summary(as.vector(omega_b_X)))
-    print("Summary of omega_c_X:")
-    print(summary(as.vector(omega_c_X)))
 
     # Transform X
     X_transformed <- apply_transformation(X, nT, omega_a_X, omega_b_X, omega_c_X, FE, TE, nEval_chunk)

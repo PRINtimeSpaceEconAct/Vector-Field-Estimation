@@ -27,7 +27,7 @@ points(dataFirst$xFut,dataFirst$wxFut,pch=19,col="red",cex=0.5)
 abline(h=1)
 abline(v=1)
 grid()
-dev.copy2pdf(file="scatterArrowsUSState.pdf")
+dev.copy2pdf(file="outpics/scatterArrowsUSState.pdf")
 # parameters ----
 nEval = 2500
 
@@ -94,7 +94,7 @@ lines(forecastEst[,1,nPeriods],forecastEst[,2,nPeriods],col="green",lwd=4)
 
 legend("bottomright",legend=c("1960","2015","Forecasted Observed","Forecasted Estimated"),
        col=c("black","red","purple","green"),pch=c(19,19,19,19),lwd=c(4,4,4,4),bg="white")
-dev.copy2pdf(file="Forecast19602015NonOverlapping.pdf")
+dev.copy2pdf(file="outpics/Forecast19602015NonOverlapping.pdf")
 
 ## plot direzioni verticali orizzontali campo vettoriale ----
 library(fields)
@@ -109,7 +109,7 @@ estFirst = sm.regression(dataFirst$GDP.t0,dataFirst$LE.t0,display="none")
 lines(estFirst$eval.points,estFirst$estimate,col="black",lwd=4)
 estLatest = sm.regression(dataLatest$GDP.t1,dataLatest$LE.t1,display="none")
 lines(estLatest$eval.points,estLatest$estimate,col="black",lwd=4,lty = 3)
-dev.copy2pdf(file="Fx19602015NonOverlapping.pdf")
+dev.copy2pdf(file="outpics/Fx19602015NonOverlapping.pdf")
 
 Fy = est_field$estimator[,2]
 dev.new()
@@ -121,7 +121,7 @@ estFirst = sm.regression(dataFirst$GDP.t0,dataFirst$LE.t0,display="none")
 lines(estFirst$eval.points,estFirst$estimate,col="black",lwd=4)
 estLatest = sm.regression(dataLatest$GDP.t1,dataLatest$LE.t1,display="none")
 lines(estLatest$eval.points,estLatest$estimate,col="black",lwd=4,lty = 3)
-dev.copy2pdf(file="Fy19602015NonOverlapping.pdf")
+dev.copy2pdf(file="outpics/Fy19602015NonOverlapping.pdf")
 
 FyOverFx = est_field$estimator[,2]/est_field$estimator[,1]
 dev.new()
@@ -133,7 +133,7 @@ estFirst = sm.regression(dataFirst$GDP.t0,dataFirst$LE.t0,display="none")
 lines(estFirst$eval.points,estFirst$estimate,col="black",lwd=4)
 estLatest = sm.regression(dataLatest$GDP.t1,dataLatest$LE.t1,display="none")
 lines(estLatest$eval.points,estLatest$estimate,col="black",lwd=4,lty = 3)
-dev.copy2pdf(file="FyoverFx19602015NonOverlapping.pdf")
+dev.copy2pdf(file="outpics/FyoverFx19602015NonOverlapping.pdf")
 
 
 # VAR a mano, ma forse giusto ----
@@ -204,7 +204,7 @@ lines(forecastEst[,1],forecastEst[,2],col="green",lwd=4)
 
 legend("bottomright",legend=c("1960","2015","Forecasted Observed","Forecasted Estimated"),
        col=c("black","red","purple","green"),pch=c(19,19,19,19),lwd=c(4,4,4,4),bg="white")
-dev.copy2pdf(file="LogForecastVAR19602015NonOverlapping.pdf")
+dev.copy2pdf(file="outpics/LogForecastVAR19602015NonOverlapping.pdf")
 
 obs = cbind(dataLatest$GDP.t1,dataLatest$LE.t1)
 diffVF = as.matrix(forecastObsVF-obs)
